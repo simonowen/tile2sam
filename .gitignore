@@ -1,0 +1,6 @@
+.vscode
+test/*.bin
+test/*.pal
+test/*.idx
+test/*.dsk
+test/*.map
