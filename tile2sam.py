@@ -37,7 +37,10 @@ def closest_palette_index(colour, palette):
 
 def palettise_image(img, palette):
     """Map image to nearest colours in a given palette"""
-    col_map = {x[1] : closest_palette_index(x[1], palette) for x in img.getcolors()}
+    img_palette = img.getcolors()
+    if img_palette is None:
+        sys.exit("error: source image has too many colours!")
+    col_map = {x[1] : closest_palette_index(x[1], palette) for x in img_palette}
 
     img_pal = Image.new('P', img.size)
     img_pal.putpalette([c for tup in palette for c in tup])
