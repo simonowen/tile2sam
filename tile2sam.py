@@ -163,16 +163,15 @@ def main(args):
     if len(palette) > (1 << bytes_per_pixel):
         sys.exit("error: too many colours ({}) for screen mode {}".format(len(palette), args.mode))
 
-    # Default to the required colours, but allow the palette to be specified.
-    clut = palette if args.clut is None else read_palette(args.clut)
+    # Default to the required colours, but allow the starting colours to be specified.
+    if args.clut is None:
+        clut = palette
+    else:
+        clut = read_palette(args.clut)
+        clut += list(set(palette).difference(set(clut)))
+
     if len(clut) > (1 << bytes_per_pixel):
         sys.exit("error: clut has too many entries ({}) for mode {}".format(len(clut), args.mode))
-
-    # The required colour palette must be a subset of the final palette.
-    if len(list(set(palette) & set(clut))) != len(palette):
-        missing = [c for c in palette if c not in clut]
-        img_pal.point(lambda c: c if c in missing else 0).show()
-        sys.exit("error: custom palette missing colours: {}".format(missing))
 
     img_clut = clutise_image(img_pal, clut)
 

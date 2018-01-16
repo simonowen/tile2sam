@@ -4,7 +4,7 @@ if "%1"=="clean" goto clean
 echo Extracting tiles
 ..\tile2sam.py -q --mode 2 font.png 6x8
 ..\tile2sam.py -q --mode 1 --shift 2 --index -o font_right.bin font.png 6x8
-..\tile2sam.py -q --clut 0,127,34,123,85,106,110,96,6,68,29,25,99,122,126,119 --pal --tiles 102 sprites.png 12x12
+..\tile2sam.py -q --clut 0,127,25,126 --pal --tiles 102 sprites.png 12x12
 ..\tile2sam.py -q --pal --tiles 101-0 -o sprites_rev.bin sprites.png 12x12
 ..\tile2sam.py -q --clut sprites.pal --shift 1 --tiles 102 -o sprites_shift.bin sprites.png 12x12
 ..\tile2sam.py -q --mode 1 --tiles 76 sprites_mono.png 12
