@@ -16,8 +16,14 @@ pip install pillow
 
 ```
 usage: tile2sam.py [-h] [-m MODE] [-c CLUT] [-o OUTPUT] [-p] [-i] [-t TILES]
-                   [-q] [--crop CROP] [--scale SCALE] [--align ALIGN]
+                   [-q] [--crop CROP] [--scale SCALE] [--shift SHIFT]
                    image tilesize
+
+Extracts tiled SAM graphics data from an image file.
+
+positional arguments:
+  image
+  tilesize
 
 optional arguments:
   -h, --help            show this help message and exit
@@ -32,7 +38,7 @@ optional arguments:
   -q, --quiet           quiet mode (default: False)
   --crop CROP           crop region (WxH or WxH+X+Y) (default: None)
   --scale SCALE         scale region (S or HxV) (default: None)
-  --align ALIGN         align 1-bit data with width < 8 (default: left)
+  --shift SHIFT         pixels to shift right (default: 0)
   ```
 
 ## Required Arguments
@@ -41,13 +47,19 @@ optional arguments:
 
 An image file containing the graphics data. Most image file formats are [supported](https://pillow.readthedocs.io/en/stable/handbook/image-file-formats.html), but it's recommended you use an efficient lossless format such as [PNG](https://en.wikipedia.org/wiki/Portable_Network_Graphics).
 
-Tiles are extracted starting from the top-left of the image. Use the ```--crop``` and ```--scale``` options to limit the area of interest. Use ```--tiles``` to select the tiles of interest, and the order they're extracted.
+Image colours are mapped to the nearest SAM palette colour, without any dithering. Images with too many source colours may be rejected. Typically you'll want to author graphics directly using the original SAM palette colours:
+
+<p align="center">
+  <img src="sampalette.png" alt="SAM palette" />
+</p>
+
+Tiles are extracted starting from the top-left of the image. Use the ```--crop``` and ```--scale``` options to limit the area of interest. Use ```--tiles``` to select the tiles of interest, and the order they're extracted. The extracted graphics may also be pre-shifted using ```--shift```.
 
 > tilesize
 
 Specifies the dimensions of the tiles to extract, in pixels. If a single value ```N``` is given it's treated as having a size of ```NxN```. If both dimensions are specified they should be in the format ```WxH```.
 
-The width of mode 4 tiles must be a multiple of 2, and the width of mode 3 tiles must be a multiple of 4. This ensures the output data is aligned to byte boundaries. The width of mode 1 and 2 tiles should a be a multiple of 8, unless the width is less than 8. In those cases the tiles will be padded up to a single byte, with the ```--align``` option controlling where the padding is added.
+If the tile width does not result in an exact number of output bytes, the right edge is padded with zero pixels. To be aligned to byte boundaries, mode 4 tile width should be a multiple of 2, mode 3 a multiple of 4, and modes 1 and 2 a multiple of 8.
 
 ## Optional Arguments
 
@@ -61,7 +73,9 @@ The default screen mode is 4.
 
 Specifies either a comma-separated list of colours, or the name of a ```.pal``` file containing the palette. Each colour should be in the range 0-127.
 
-The default behaviour generates a palette from the colours found in the image. The number of colours must be within the limit for selected screen mode.
+A complete palette is not required, but those specified will be assigned to the first CLUT slots. Any additional colours required by the image will be automatically assigned to later positions. The final CLUT size must be within the limit for the screen mode (sixteen colours for mode 4, four colours for mode 3, and two colours for modes 1 and 2).
+
+The default behaviour generates a palette from the colours found in the image.
 
 > ```-o OUTPUT, --output OUTPUT```
 
@@ -103,30 +117,32 @@ Scale the input image before extraction, which is useful for pixel-doubled and m
 
 The default behaviour is not to scale the input image.
 
-> ```--align ALIGN```
+> ```--shift SHIFT```
 
-Aligns 1-bit content within each byte, padding with CLUT zero pixels. This is special behaviour only for 1-bit content with a width less than 8. In all other cases the width must make up complete bytes.
+Specifies the number of pixels to shift each tile to the right in the output data. This will add padding to the left of the data, and may also result in additional alignment padding to the right. All padding uses CLUT entry zero, which will usually be black.
 
-The default behaviour is to left-align narrow 1-bit content.
+Please note that shifting output may increase the byte width of the output data. The final tile pixel size (including padding) is reported in the output statistics after conversion. This option can be used to create pre-shifted versions of graphics for optimised drawing routines.
+
+The default behaviour is not to shift content.
 
 ## Examples
 
 Extract all 16x16 tiles from ```sprites.png```, write the graphics data to ```sprites.bin``` and palette to ```sprites.pal```:
 
 ```
-tile2sam.py --pal sprites.png 16
+tile2sam.py --pal sprites.png 16x16
 ```
 
 Extract the first 100 6x6 tiles from ```tiles.png```, using the colours from ```sprites.pal```:
 
 ```
-tile2sam.py --clut sprites.pal --tiles 100 tiles.png 6
+tile2sam.py --clut sprites.pal --tiles 100 tiles.png 6x6
 ```
 
 Extract a non-contiguous selection of 6x6 tiles from ```tiles.png```:
 
 ```
-tile2sam.py --tiles 10-19,99-90,42 tiles.png 6x6
+tile2sam.py --tiles 10-19,99-90,42 tiles.png 6
 ```
 
 Extract a 6x8 1-bit font from ```font.png```, write the data to ```font.bin```:
@@ -134,14 +150,14 @@ Extract a 6x8 1-bit font from ```font.png```, write the data to ```font.bin```:
 tile2sam.py --mode 2 font.png 6x8
 ```
 
-Extract a 6x8 1-bit font from ```font.png```, centre-align the data within each byte and write to ```font_centre.bin```:
+Extract a 6x8 1-bit font from ```font.png```, shifting the data 2 positions to right-align it, then write to ```font_centre.bin```:
 ```
-tile2sam.py --mode 2 --align centre -o font_centre.bin font.png 6x8
+tile2sam.py --mode 2 --shift 2 -o font_centre.bin font.png 6x8
 ```
 
-Extract all 12x12 sprites from ```sprites.png```, using the specified CLUT colours:
+Extract all 12x12 sprites from ```sprites.png```, fixing only the first 4 CLUT colours so the rest are automatically assigned:
 ```
-tile2sam.py --clut 0,127,34,123,85,106,110,96,6,68,29,25,99,122,126,119 sprites.png 12x12
+tile2sam.py --clut 0,127,25,126 sprites.png 12
 ```
 
 Extract a mode 4 screen from a 576x480 SimCoupe screenshot to ```mode4.bin``` and ```mode4.pal```:
@@ -163,7 +179,7 @@ The ```test``` folder in the source code contains similar examples, plus example
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE.txt](LICENSE.txt) file for details
+This project is licensed under the MIT License - see the [LICENSE.md](LICENSE.md) file for details
 
 ## Author
 
