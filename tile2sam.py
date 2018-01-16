@@ -126,21 +126,8 @@ def main(args):
 
     if args.mode not in [1, 2, 3, 4]:
         sys.exit("error: invalid screen mode ({}), must be 1-4".format(args.mode))
-    bytes_per_pixel = [1, 1, 2, 4][args.mode - 1]
 
     tile_width, tile_height = get_tile_size(args.tilesize)
-
-    # Narrow 1bpp data is padded up to a byte, and optionally aligned.
-    if tile_width < 8 and bytes_per_pixel == 1:
-        align_shift = 0 if args.align == 'right' else (-tile_width % 8)
-        if args.align in ('centre', 'center'):
-            align_shift = (align_shift + 1) // 2
-        pixels_per_byte = tile_width
-    else:
-        align_shift = 0
-        pixels_per_byte = 8 // bytes_per_pixel
-        if (tile_width % pixels_per_byte) != 0:
-            sys.exit("error: tile width must be a multiple of bytes-per-pixel")
 
     try:
         img = Image.open(args.image).convert("RGB")
@@ -167,6 +154,10 @@ def main(args):
 
     sam_palette = generate_sam_palette()
     img_pal = palettise_image(img, sam_palette)
+
+    bytes_per_pixel = [1, 1, 2, 4][args.mode - 1]
+    pixels_per_byte = 8 // bytes_per_pixel
+    pad_pixels = args.shift + (-(tile_width + args.shift) % pixels_per_byte)
 
     palette = [c[1] for c in img_pal.getcolors()]
     if len(palette) > (1 << bytes_per_pixel):
@@ -196,12 +187,23 @@ def main(args):
             if img_tile.width == 0:
                 continue
 
-            # Break the image data into tuples that each represent 1 output byte.
-            it = iter(img_tile.getdata())
-            byte_pixels = zip(*[it] * pixels_per_byte)
+            # Split the data into pixels rows of the tile width.
+            it_tile_data = iter(img_tile.getdata())
+            pixel_rows = zip(*[it_tile_data] * tile_width)
 
-            # Combine the tuples in the correct order for the output data.
-            data = [sum([value << (index * bytes_per_pixel + align_shift)
+            # Pad rows for shifting space, plus alignment to the next byte boundary.
+            padded_rows = [x + (0, ) * pad_pixels for x in pixel_rows]
+
+            # Shift the image data to the right if requested.
+            if args.shift > 0:
+                padded_rows = [x[-args.shift:] + x[:len(x) - args.shift] for x in padded_rows]
+
+            # Flatten the list of rows and break into byte-sized groups of pixels.
+            it_padded_pixels = iter([x for x in padded_rows for x in x])
+            byte_pixels = zip(*[it_padded_pixels] * pixels_per_byte)
+
+            # Combine the pixel groups in the correct order for the output data.
+            data = [sum([value << (index * bytes_per_pixel)
                          for index, value in enumerate(reversed(pix))])
                     for pix in byte_pixels]
 
@@ -230,7 +232,7 @@ def main(args):
     if not args.quiet:
         print("{} colours: {}".format(len(clut), clut))
         print("{} tile(s) of size {}x{} for mode {} = {} bytes".format(
-            num_tiles, tile_width, tile_height, args.mode, len(tile_data)))
+            num_tiles, tile_width + pad_pixels, tile_height, args.mode, len(tile_data)))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -245,7 +247,7 @@ if __name__ == "__main__":
     parser.add_argument('-q', '--quiet', action='store_true', default=False, help="quiet mode")
     parser.add_argument('--crop', help="crop region (WxH or WxH+X+Y)")
     parser.add_argument('--scale', help="scale region (S or HxV)")
-    parser.add_argument('--align', default='left', help="align 1-bit data with width < 8")
+    parser.add_argument('--shift', default=0, type=int, help="pixels to shift right")
     parser.add_argument('image')
     parser.add_argument('tilesize')
     main(parser.parse_args())
