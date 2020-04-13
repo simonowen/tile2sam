@@ -158,12 +158,12 @@ def main(args):
     sam_palette = generate_sam_palette()
     img_pal = palettise_image(img, sam_palette)
 
-    bytes_per_pixel = [1, 1, 2, 4][args.mode - 1]
-    pixels_per_byte = 8 // bytes_per_pixel
+    bits_per_pixel = [1, 1, 2, 4][args.mode - 1]
+    pixels_per_byte = 8 // bits_per_pixel
     pad_pixels = args.shift + (-(tile_width + args.shift) % pixels_per_byte)
 
     palette = [c[1] for c in img_pal.getcolors()]
-    if len(palette) > (1 << bytes_per_pixel):
+    if len(palette) > (1 << bits_per_pixel):
         sys.exit("error: too many colours ({}) for screen mode {}".format(len(palette), args.mode))
 
     # Default to the required colours, but allow the starting colours to be specified.
@@ -173,7 +173,7 @@ def main(args):
         clut = read_palette(args.clut)
         clut += list(set(palette).difference(set(clut)))
 
-    if len(clut) > (1 << bytes_per_pixel):
+    if len(clut) > (1 << bits_per_pixel):
         sys.exit("error: clut has too many entries ({}) for mode {}".format(len(clut), args.mode))
 
     img_clut = clutise_image(img_pal, clut)
@@ -205,8 +205,8 @@ def main(args):
             byte_pixels = zip(*[it_padded_pixels] * pixels_per_byte)
 
             # Combine the pixel groups in the correct order for the output data.
-            data = [sum([value << (index * bytes_per_pixel)
-                         for index, value in enumerate(reversed(pix))])
+            data = [sum([value << (index * bits_per_pixel)
+                    for index, value in enumerate(reversed(pix))])
                     for pix in byte_pixels]
 
             tile_offsets += (len(tile_data),)
