@@ -4,3 +4,8 @@ test/*.pal
 test/*.idx
 test/*.dsk
 test/*.map
+demo?/*.dsk
+demo?/sprite*.asm
+demo?/*.pal
+demo?/*.dsk
+demo?/*.map
