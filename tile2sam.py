@@ -8,7 +8,7 @@ import re
 import sys
 import struct
 import argparse
-from PIL import Image     # requires Pillow ("pip install pillow")
+from PIL import Image     # requires Pillow ("python -m pip install pillow")
 
 def rgb_from_index(i):
     """Map SAM palette index to RGB tuple"""
@@ -107,7 +107,7 @@ def get_tile_size(size):
         sys.exit("error: invalid tile dimensions")
 
 def get_tile_selection(tile_select, max_tiles):
-    """Detetermine the tile selection to extract"""
+    """Determine the tile selection to extract"""
     if tile_select is None:
         return [(0, max_tiles - 1)]
 
@@ -123,6 +123,23 @@ def get_tile_selection(tile_select, max_tiles):
         except (ValueError, IndexError):
             sys.exit("error: invalid tile count or range")
     return selection
+
+def group_split(items, group_size):
+    """Split a list into groups of a given size"""
+    it = iter(items)
+    return list(zip(*[it] * group_size))
+
+def image_data_bytes(img_data, bits_per_pixel):
+    """Convert CLUT entries to SAM display byte rows"""
+    byte_groups = group_split(img_data, 8 // bits_per_pixel)
+    data_bytes = [sum([n << (bits_per_pixel * i)
+                    for i,n in enumerate(reversed(t))]) for t in byte_groups]
+
+    mask_value = (1 << bits_per_pixel) - 1
+    mask_bytes = [sum([(mask_value if n else 0) << (bits_per_pixel * i)
+                    for i,n in enumerate(reversed(t))]) for t in byte_groups]
+
+    return data_bytes, mask_bytes
 
 def main(args):
     """Main Program"""
@@ -160,7 +177,9 @@ def main(args):
 
     bits_per_pixel = [1, 1, 2, 4][args.mode - 1]
     pixels_per_byte = 8 // bits_per_pixel
-    pad_pixels = args.shift + (-(tile_width + args.shift) % pixels_per_byte)
+
+    pad_left = args.shift
+    pad_right = (-(pad_left + tile_width) % pixels_per_byte)
 
     palette = [c[1] for c in img_pal.getcolors()]
     if len(palette) > (1 << bits_per_pixel):
@@ -189,28 +208,15 @@ def main(args):
             if img_tile.width == 0:
                 continue
 
-            # Split the data into pixels rows of the tile width.
-            it_tile_data = iter(img_tile.getdata())
-            pixel_rows = zip(*[it_tile_data] * tile_width)
+            sprite_width = pad_left + tile_width + pad_right
+            img_sprite = Image.new(img_tile.mode, (sprite_width, tile_height))
+            img_sprite.paste(img_tile, (pad_left, 0, pad_left + tile_width, tile_height))
 
-            # Pad rows for shifting space, plus alignment to the next byte boundary.
-            padded_rows = [x + (0, ) * pad_pixels for x in pixel_rows]
+            image_data, _ = image_data_bytes(img_sprite.getdata(), bits_per_pixel)
 
-            # Shift the image data to the right if requested.
-            if args.shift > 0:
-                padded_rows = [x[-args.shift:] + x[:len(x) - args.shift] for x in padded_rows]
 
-            # Flatten the list of rows and break into byte-sized groups of pixels.
-            it_padded_pixels = iter([x for x in padded_rows for x in x])
-            byte_pixels = zip(*[it_padded_pixels] * pixels_per_byte)
-
-            # Combine the pixel groups in the correct order for the output data.
-            data = [sum([value << (index * bits_per_pixel)
-                    for index, value in enumerate(reversed(pix))])
-                    for pix in byte_pixels]
-
-            tile_offsets += (len(tile_data),)
-            tile_data += data
+            tile_offsets.append(len(tile_data))
+            tile_data += image_data
             num_tiles += 1
 
     if args.output is None:
@@ -234,7 +240,7 @@ def main(args):
     if not args.quiet:
         print("{} colours: {}".format(len(clut), clut))
         print("{} tile(s) of size {}x{} for mode {} = {} bytes".format(
-            num_tiles, tile_width + pad_pixels, tile_height, args.mode, len(tile_data)))
+            num_tiles, pad_left + tile_width + pad_right, tile_height, args.mode, len(tile_data)))
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
