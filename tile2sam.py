@@ -94,7 +94,7 @@ def scale_image(img, scale):
     """Scale image by given factor(s)"""
     try:
         factors = [float(x) for x in re.findall(r"[\d.]+", scale)] * 2
-        return img.resize([int(n * factors[i]) for i, n in enumerate(img.size)])
+        return img.resize([int(n * factors[i]) for i, n in enumerate(img.size)], Image.NEAREST)
     except (ValueError, IndexError):
         sys.exit("error: invalid scale factors")
 
