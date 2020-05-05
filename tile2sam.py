@@ -349,6 +349,8 @@ def reg16_change(a, b, *, reg='hl', spare_pair=None, value_stream=None):
 
             if delta > 0 and delta < 256:
                 code += [f'adc a,{reg[0]}', f'sub {reg[1]}', f'ld {reg[0]},a']
+            elif delta < 0 and delta > -256:
+                code += [f'sbc a,a', f'add a,{reg[0]}', f'ld {reg[0]},a']
             else:
                 val = value_stream.next_value(code) if value_stream else dist >> 8
                 values.append(val)
