@@ -632,7 +632,7 @@ def tile_to_code(args, img_tile, idx_tile):
     if 'masked' in routines:
         label = f'masked_{name}'
         if not shifted:
-            code += format_code(label, masked_code0)
+            code += format_code(label, coord_code + masked_code0)
         else:
             code += format_code(label, coord_code + [f'jp c,{label}1'])
             code += format_code(f'{label}0', masked_code0)
@@ -641,7 +641,7 @@ def tile_to_code(args, img_tile, idx_tile):
     if 'unmasked' in routines:
         label = f'unmasked_{name}'
         if not shifted:
-            code += format_code(label, unmasked_code0)
+            code += format_code(label, coord_code + unmasked_code0)
         else:
             code += format_code(label, coord_code + [f'jp c,{label}1'])
             code += format_code(f'{label}0', unmasked_code0)
