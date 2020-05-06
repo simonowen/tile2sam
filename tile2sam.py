@@ -708,7 +708,7 @@ def main(args):
     img.crop((0, 0, tiles_x * tile_width, tiles_y * tile_height))
 
     if not tiles_x or not tiles_y:
-        sys.exit(f"error: no tiles found for size {tile_width}x{tile_height}")
+        sys.exit(f"error: source image too small for {tile_width}x{tile_height} tiles")
     elif not args.quiet:
         print(f"Contains {tiles_x}x{tiles_y} grid of {tile_width}x{tile_height} tiles")
 
@@ -744,8 +744,6 @@ def main(args):
             y = (idx_tile // tiles_x) * tile_height
 
             img_tile = img_clut.crop((x, y, x + tile_width, y + tile_height))
-            if img_tile.width == 0:
-                continue
 
             if args.code:
                 code_text += tile_to_code(args, img_tile, idx_tile)
@@ -758,16 +756,20 @@ def main(args):
     basename = os.path.splitext(args.output or args.image)[0]
 
     if gfx_data:
-        with open(args.output or f"{basename}.bin", 'ab+' if args.append else 'wb') as f:
+        filename = args.output or f"{basename}.bin"
+        with open(filename, 'ab+' if args.append else 'wb') as f:
             f.write(bytearray(gfx_data))
-
         if not args.quiet:
             print(f"{num_tiles} tile(s) of size {tile_width}x{tile_height} "
                 f"for mode {args.mode} = {len(gfx_data)} bytes")
+            print(f"Data written to {filename}")
 
     if code_text:
-        with open(args.output or f"{basename}.asm", 'a+' if args.append else 'w') as f:
+        filename = args.output or f"{basename}.asm"
+        with open(filename, 'a+' if args.append else 'w') as f:
             f.write(code_text)
+        if not args.quiet:
+            print(f"Code {'appended' if args.append else 'written'} to {filename}")
 
     if args.pal:
         with open(f"{basename}.pal", 'wb') as f:
