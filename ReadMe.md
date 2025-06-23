@@ -56,7 +56,7 @@ An image file containing the graphics data. Most image file formats are [support
 Image colours are mapped to the nearest SAM palette colour, without any dithering. Images with too many source colours may be rejected. Typically you'll want to author graphics directly using the original SAM palette colours:
 
 <p align="center">
-  <img src="sampalette.png" alt="SAM palette" />
+  <img src="images/sampalette.png" alt="SAM palette" />
 </p>
 
 Tiles are extracted starting from the top-left of the image. Use the `--crop` and `--scale` options to limit the area of interest. Use `--tiles` to select the tiles of interest, and the order they're extracted. The extracted graphics may also be pre-shifted using `--shift`.
