@@ -1,74 +1,75 @@
-; Demo 1 - single sprite save/draw/remove
-lmpr: equ 250
-vmpr: equ 252
+; Demo 1 - draw masked sprite with background save/restore
+
+lmpr:    equ 250
+vmpr:    equ 252
 
 coords0: equ &0103 ; @3,1
 
-        org &8000
+        org  &8000
         dump $
         autoexec
 
         di
         call bkg_text
 
-        ld  (oldsp+1),sp
-        ld  sp,new_stack
+        ld   (oldsp+1),sp
+        ld   sp,new_stack
 
-        in  a,(lmpr)
+        in   a,(lmpr)
         push af
-        in  a,(vmpr)
+        in   a,(vmpr)
         push af
-        and %00011111
-        or  %00100000
-        out (lmpr),a
+        and  %00011111
+        or   %00100000
+        out  (lmpr),a
 
-        ld  hl,palette_end-1
-        ld  c,&f8
-        ld  b,palette_end-palette
+        ld   hl,palette_end-1
+        ld   c,&f8
+        ld   b,palette_end-palette
         otdr
 
         call delay
 
-        ld  hl,coords0
-        ld  de,sprite0_buf
+        ld   hl,coords0
+        ld   de,sprite0_buf
         call save_ghost
 
-        ld  hl,coords0
+        ld   hl,coords0
         call masked_ghost
 
         call delay
 
-        ld  hl,coords0
-        ld  de,sprite0_buf
+        ld   hl,coords0
+        ld   de,sprite0_buf
         call restore_ghost
 
         call delay
 
-        pop af
-        out (vmpr),a
-        pop af
-        out (lmpr),a
+        pop  af
+        out  (vmpr),a
+        pop  af
+        out  (lmpr),a
 oldsp:
-        ld  sp,0
+        ld   sp,0
         ei
         ret
 
-delay:  ld  b,5
-@loop:  dec hl
-        ld  a,h
-        or  l
-        jr  nz,@-loop
+delay:  ld   b,5
+@loop:  dec  hl
+        ld   a,h
+        or   l
+        jr   nz,@-loop
         djnz @-loop
         ret
 
 bkg_text:
-        ld  a,2         ; main screen
+        ld   a,2        ; main screen
         call &0112      ; SETSTRM - set stream in A
-        ld  hl,text
-        ld  b,8
-@loop:  ld  a,(hl)
-        rst &10
-        inc hl
+        ld   hl,text
+        ld   b,8
+@loop:  ld   a,(hl)
+        rst  &10
+        inc  hl
         djnz @-loop
         ret
 

@@ -1,39 +1,42 @@
-; Demo 3 - draw unmasked sprites with background clear
+; Demo 3 - draw many unmasked sprites with background clear
 
-lmpr:   equ 250
-hmpr:   equ 251
-vmpr:   equ 252
+lmpr:      equ 250
+hmpr:      equ 251
+vmpr:      equ 252
 
-rom0_off: equ %00100000
-mode4:  equ %01100000
+rom0_off:  equ %00100000
+mode4:     equ %01100000
 
-base:   equ &8000
+base:      equ &8000
 interrupt: equ &0038
-lastpos: equ &e000
+lastpos:   equ &e000
+
+sprite_width:  equ 12
+sprite_height: equ 12
 
         org 0
         dump base+$
         autoexec
 
         di
-        ld  a,1+rom0_off
-        out (lmpr),a
-        ld  a,4+mode4
-        out (vmpr),a
-        ld  sp,base
-        ld hl,palette_end-1
-        ld c,&f8
-        ld b,palette_end-palette
+        ld   a,1+rom0_off
+        out  (lmpr),a
+        ld   a,4+mode4
+        out  (vmpr),a
+        ld   sp,base
+        ld   hl,palette_end-1
+        ld   c,&f8
+        ld   b,palette_end-palette
         otdr
-        jp init
+        jp   init
 
 init:   call flip
         ei
-        jr  $
+        jr   $
 
-        org interrupt
+        org  interrupt
         dump base+$
-        ld  c,sprite1-sprite0
+        ld   c,sprite1-sprite0
         call flip
         call clear
         call move
@@ -41,101 +44,105 @@ init:   call flip
         ei
         ret
 
-flip:   in  a,(vmpr)
-        ld  b,a
-        xor %00000010
-        out (vmpr),a
-        ld  a,b
-        and %00011111
-        out (hmpr),a
+flip:   in   a,(vmpr)
+        ld   b,a
+        xor  %00000010
+        out  (vmpr),a
+        ld   a,b
+        and  %00011111
+        out  (hmpr),a
         ret
 
-clear: ld  iy,lastpos
-        ld  b,num_sprites
+clear:  ld   iy,lastpos
+        ld   b,num_sprites
 @loop:
-        ld  a,(iy)
-        add a,a
-        add a,clear_funcs\256
-        ld  l,a
-        adc a,clear_funcs/256
-        sub l
-        ld h,a
-        ld a,(hl)
-        inc hl
-        ld h,(hl)
-        ld l,a
-        ld  (@calladdr+1),hl
-        ld  l,(iy+1)
-        ld  h,(iy+2)
+        ld   a,(iy)
+        add  a,a
+        add  a,clear_funcs\256
+        ld   l,a
+        adc  a,clear_funcs/256
+        sub  l
+        ld   h,a
+        ld   a,(hl)
+        inc  hl
+        ld   h,(hl)
+        ld   l,a
+        ld   (@calladdr+1),hl
+        ld   l,(iy+1)
+        ld   h,(iy+2)
         push bc
-        ld  b,0
-        add iy,bc
+        ld   b,0
+        add  iy,bc
 @calladdr:
         call 0
-        pop bc
+        pop  bc
         djnz @-loop
         ret
 
-draw:   ld  iy,lastpos
-        ld  ix,sprite0
-        ld  hl,draw_funcs
-        ld  b,num_sprites
+draw:   ld   iy,lastpos
+        ld   ix,sprite0
+        ld   hl,draw_funcs
+        ld   b,num_sprites
 @loop:
-        ld  a,(ix)
-        ld  (iy),a
-        add a,a
-        add a,draw_funcs\256
-        ld  l,a
-        adc a,draw_funcs/256
-        sub l
-        ld h,a
-        ld a,(hl)
-        inc hl
-        ld h,(hl)
-        ld l,a
-        ld  (@calladdr+1),hl
-        ld  l,(ix+1)
-        ld  h,(ix+2)
-        ld (iy+1),l
-        ld (iy+2),h
+        ld   a,(ix)
+        ld   (iy),a
+        add  a,a
+        add  a,draw_funcs\256
+        ld   l,a
+        adc  a,draw_funcs/256
+        sub  l
+        ld   h,a
+        ld   a,(hl)
+        inc  hl
+        ld   h,(hl)
+        ld   l,a
+        ld   (@calladdr+1),hl
+        ld   l,(ix+1)
+        ld   h,(ix+2)
+        ld   (iy+1),l
+        ld   (iy+2),h
         push bc
-        ld  b,0
-        add ix,bc
-        add iy,bc
+        ld   b,0
+        add  ix,bc
+        add  iy,bc
 @calladdr:
         call 0
-        pop bc
+        pop  bc
         djnz @-loop
         ret
 
-move:   ld  ix,sprite0
-        ld  b,num_sprites
-        ld  e,c
-        ld  d,0
+move:   ld   ix,sprite0
+        ld   b,num_sprites
+        ld   e,c
+        ld   d,0
 @loop:  
-        ld  a,(ix+1)
-        add a,(ix+3)
-        ld  (ix+1),a
-        jr  z,revy
-        cp  256-12-1
-        jr  c,no_revy
-revy:   
-        ld  a,(ix+3)
+        ld   a,(ix+1)
+        add  a,(ix+3)
+        ld   (ix+1),a
+        jr   z,revx
+        cp   256-sprite_width
+        jr   c,no_revx
+revx:
+        ld   a,(ix+3)
         neg
-        ld  (ix+3),a
-no_revy:
-        ld  a,(ix+2)
-        add a,(ix+4)
-        ld  (ix+2),a
-        jr  z,revx
-        cp  192-11-1
-        jr  c,no_revx
-revx:   
-        ld  a,(ix+4)
-        neg
-        ld  (ix+4),a
+        ld   (ix+3),a
+        add  a,(ix+1)
+        ld   (ix+1),a
 no_revx:
-        add ix,de
+        ld   a,(ix+2)
+        add  a,(ix+4)
+        ld   (ix+2),a
+        jr   z,revy
+        cp   192-sprite_height
+        jr   c,no_revy
+revy:
+        ld   a,(ix+4)
+        neg
+        ld   (ix+4),a
+        add  a,(ix+2)
+        ld   (ix+2),a
+no_revy:
+        add  ix,de
         djnz @-loop
         ret
 
