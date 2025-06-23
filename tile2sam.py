@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 #
 # https://github.com/simonowen/tile2sam
 """Extracts tiled SAM graphics data from an image file"""
