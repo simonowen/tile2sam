@@ -98,7 +98,7 @@ def read_palette(pal):
             return [c & 0x7f for c in bytearray(f.read())]
     except IOError:
         try:
-            return [int(x, 0) & 0x7f for x in pal.split(',')]
+            return [(int(x, 0) & 0x7f) for x in pal.split(',')]
         except ValueError:
             sys.exit("error: invalid colour list")
 
@@ -117,7 +117,7 @@ def crop_image(img, geometry):
     try:
         crop = [int(x) for x in re.findall(r"\d+", geometry)]
         if len(crop) == 2:      # WxH
-            img = img.crop(crop)
+            img = img.crop((0, 0, *crop))
         elif len(crop) == 4:    # WxH+X+Y
             img = img.crop((crop[2], crop[3], crop[2]+crop[0], crop[3]+crop[1]))
         else:
