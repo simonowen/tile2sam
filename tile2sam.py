@@ -723,7 +723,8 @@ def main(args):
         sys.exit(f"error: too many colours ({len(palette)}) for screen mode {args.mode}")
 
     if args.clut is None:
-        clut = palette
+        basic_clut = [0,16,32,48,64,80,96,120,0,17,34,51,68,85,102,127]  # noqa: E231
+        clut = basic_clut if args.mode == 4 and set(palette).issubset(basic_clut) else palette
     else:
         clut = read_palette(args.clut)
         clut += list(set(palette).difference(set(clut)))
