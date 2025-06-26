@@ -177,6 +177,12 @@ def image_data_bytes(img_data, bpp=4):
 
     return data_bytes, mask_bytes
 
+def rect_mask(mask_data):
+    """Set all nibbles in a mask for a rectangle"""
+    combined_row = [0xff if any(x for x in col) else 0 for col in zip(*mask_data)]
+    rect_mask_data = [combined_row] * len(mask_data)
+    return rect_mask_data
+
 ###############################################################################
 # Code Generation Helpers
 
@@ -374,7 +380,7 @@ def reg16_change(a, b, *, reg='hl', spare_pair=None, value_stream=None):
 ###############################################################################
 # Routine Generators
 
-def generate_draw_poke(image_data, mask_data, width_bytes, height, *, masked=True):
+def generate_draw_poke(image_data, mask_data, *, masked=True):
     """Generate drawing code that pokes data into memory"""
     spare_pair = None
 
@@ -385,21 +391,21 @@ def generate_draw_poke(image_data, mask_data, width_bytes, height, *, masked=Tru
         values = []
         last_addr = 0
         dx = 1
+        width_bytes, height = len(mask_data[0]), len(mask_data)
 
         # Even lines down, odd lines up, in zig-zag pattern
         for p in range(2):
             for y in range(0, height, 2) if p == 0 else reversed(range(1, height, 2)):
                 for x in range(width_bytes) if dx > 0 else reversed(range(width_bytes)):
-                    idx_data = y * width_bytes + x
-                    if mask_data[idx_data]:
+                    if mask_data[y][x]:
                         addr = y * 128 + x
                         values += reg16_change(last_addr, addr, spare_pair=spare_pair)[1]
 
-                        if masked and mask_data[idx_data] and mask_data[idx_data] != 0xff:
-                            values.append(~mask_data[idx_data] & 0xff)
+                        if masked and mask_data[y][x] != 0xff:
+                            values.append(~mask_data[y][x] & 0xff)
                             mask_addrs.append(addr)
 
-                        values.append(image_data[idx_data])
+                        values.append(image_data[y][x] if image_data else 0)
                         image_addrs.append(addr)
 
                         last_addr = addr
@@ -433,15 +439,16 @@ def generate_draw_poke(image_data, mask_data, width_bytes, height, *, masked=Tru
     code.append('ret')
     return code
 
-def generate_save_restore_ldi(mask_data, width_bytes, height):
+def generate_save_restore_ldi(mask_data):
     """Generate save/restore code that uses LDI"""
     image_addrs = []
+    width_bytes, height = len(mask_data[0]), len(mask_data)
 
     # Even lines down, odd lines up, all left-to-right
     for p in range(2):
         for y in range(0, height, 2) if p == 0 else reversed(range(1, height, 2)):
             for x in range (width_bytes):
-                if mask_data[y * width_bytes + x]:
+                if mask_data[y][x]:
                     addr = y * 128 + x
                     image_addrs.append(addr)
 
@@ -463,18 +470,18 @@ def generate_save_restore_ldi(mask_data, width_bytes, height):
 
     return save_code, restore_code
 
-def generate_save_restore_stack(mask_data, width_bytes, height):
+def generate_save_restore_stack(mask_data):
     """Generate save/restore code that uses both memory access and stack"""
     mask_addrs = []
     stack_space = 0
     dx = 1
+    width_bytes, height = len(mask_data[0]), len(mask_data)
 
     # Even lines down, odd lines up, in zig-zag pattern
     for p in range(2):
         for y in range(0, height, 2) if p == 0 else reversed(range(1, height, 2)):
             for x in range(width_bytes) if dx > 0 else reversed(range(width_bytes)):
-                idx_data = y * width_bytes + x
-                if mask_data[idx_data]:
+                if mask_data[y][x]:
                     addr = y * 128 + x
                     mask_addrs.append(addr)
                     stack_space += 1
@@ -523,18 +530,17 @@ def generate_save_restore_stack(mask_data, width_bytes, height):
 
     return save_code, restore_code
 
-def generate_clear_push(mask_data, width_bytes, height):
+def generate_clear_push(mask_data):
     """Generate display clear code that (mostly) uses the stack"""
     line_ends = []
     last_addr = 0
-
-    line_data = group_split(mask_data, width_bytes)
+    height = len(mask_data)
 
     for p in range(2):
         for y in range(0, height, 2) if p == 0 else reversed(range(1, height, 2)):
-            start = next((i for i, m in enumerate(line_data[y]) if m), None)
+            start = next((i for i, m in enumerate(mask_data[y]) if m), None)
             if start != None:
-                end = next((i for i, m in reversed(list(enumerate(line_data[y]))) if m)) + 1
+                end = next((i for i, m in reversed(list(enumerate(mask_data[y]))) if m)) + 1
                 end_addr = y * 128 + end
 
                 line_ends.append((end_addr, end - start))
@@ -596,30 +602,31 @@ def tile_to_code(args, img_tile, idx_tile):
 
     shifted = args.shift != 0
     width_bytes0, width_bytes1 = (img_tile.width + 1) // 2, (img_tile.width + 2) // 2
+    width_bytes = width_bytes1
     height = img_tile.height
 
-    img0 = Image.new(img_tile.mode, (width_bytes0 * 2, height))
-    img1 = Image.new(img_tile.mode, (width_bytes1 * 2, height))
+    img0 = Image.new(img_tile.mode, (width_bytes * 2, height))
+    img1 = Image.new(img_tile.mode, (width_bytes * 2, height))
     img0.paste(img_tile, (0, 0))
     img1.paste(img_tile, (1, 0))
 
-    image_data0, mask_data0 = image_data_bytes(img0.getdata())
-    image_data1, mask_data1 = image_data_bytes(img1.getdata())
+    image_data0, mask_data0 = [group_split(x, width_bytes) for x in image_data_bytes(img0.getdata())]
+    image_data1, mask_data1 = [group_split(x, width_bytes) for x in image_data_bytes(img1.getdata())]
 
-    masked_code0 = generate_draw_poke(image_data0, mask_data0, width_bytes0, height)
-    masked_code1 = generate_draw_poke(image_data1, mask_data1, width_bytes1, height)
-    unmasked_code0 = generate_draw_poke(image_data0, mask_data0, width_bytes0, height, masked=False)
-    unmasked_code1 = generate_draw_poke(image_data1, mask_data1, width_bytes1, height, masked=False)
-    save_stack_code0, restore_stack_code0 = generate_save_restore_stack(mask_data0, width_bytes0, height)
-    save_stack_code1, restore_stack_code1 = generate_save_restore_stack(mask_data1, width_bytes1, height)
-    save_ldi_code0, restore_ldi_code0 = generate_save_restore_ldi(mask_data0, width_bytes0, height)
-    save_ldi_code1, restore_ldi_code1 = generate_save_restore_ldi(mask_data1, width_bytes1, height)
-    clear_poke_code0 = generate_draw_poke([0] * len(mask_data0), mask_data0, width_bytes0, height, masked=False)
-    clear_poke_code1 = generate_draw_poke([0] * len(mask_data1), mask_data1, width_bytes1, height, masked=False)
-    clear_push_code0 = generate_clear_push(mask_data0, width_bytes0, height)
-    clear_push_code1 = generate_clear_push(mask_data1, width_bytes1, height)
-    rect_poke_code0 = generate_draw_poke([0] * len(mask_data0), [0xff] * len(mask_data0), width_bytes0, height, masked=False)
-    rect_poke_code1 = generate_draw_poke([0] * len(mask_data1), [0xff] * len(mask_data1), width_bytes1, height, masked=False)
+    masked_code0 = generate_draw_poke(image_data0, mask_data0)
+    masked_code1 = generate_draw_poke(image_data1, mask_data1)
+    unmasked_code0 = generate_draw_poke(image_data0, mask_data0, masked=False)
+    unmasked_code1 = generate_draw_poke(image_data1, mask_data1, masked=False)
+    save_stack_code0, restore_stack_code0 = generate_save_restore_stack(mask_data0)
+    save_stack_code1, restore_stack_code1 = generate_save_restore_stack(mask_data1)
+    save_ldi_code0, restore_ldi_code0 = generate_save_restore_ldi(mask_data0)
+    save_ldi_code1, restore_ldi_code1 = generate_save_restore_ldi(mask_data1)
+    clear_poke_code0 = generate_draw_poke(None, mask_data0, masked=False)
+    clear_poke_code1 = generate_draw_poke(None, mask_data1, masked=False)
+    clear_push_code0 = generate_clear_push(mask_data0)
+    clear_push_code1 = generate_clear_push(mask_data1)
+    rect_poke_code0 = generate_draw_poke(None, rect_mask(mask_data0), masked=False)
+    rect_poke_code1 = generate_draw_poke(None, rect_mask(mask_data1), masked=False)
     rect_push_code0 = generate_clear_rect_push(width_bytes0, height)
     rect_push_code1 = generate_clear_rect_push(width_bytes1, height)
 
@@ -662,7 +669,7 @@ def tile_to_code(args, img_tile, idx_tile):
     if 'rect' in routines:
         rect_code0 = fastest_code([rect_poke_code0], [rect_push_code0])[0]
         rect_code1 = fastest_code([rect_poke_code1], [rect_push_code1])[0]
-        code += branched_code(f'clear_rect_{width_bytes0}x{height}', coord_code, rect_code0, rect_code1, shifted)
+        code += branched_code(f'clear_rect_{width_bytes}x{height}', coord_code, rect_code0, rect_code1, shifted)
 
     return code
 
