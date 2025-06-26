@@ -194,6 +194,16 @@ def nominal_timing(instrs):
 def fastest_code(*code):
     return min(*code, key=lambda x: sum(nominal_timing(z) for z in x))
 
+def branched_code(label, coord_code, code0, code1, shifted):
+    """Return code with a branch to the second code block if needed"""
+    if not shifted or code0 == code1:
+        return format_code(label, coord_code + code0)
+
+    label0, label1 = f'{label}_0', f'{label}_1'
+    return (format_code(label, coord_code + [f'jp c,{label1}']) +
+            format_code(label0, code0) +
+            format_code(label1, code1))
+
 def format_code(label, code):
     indent = ' ' * 8
     text = f'{label}:\n' if label else ''
@@ -453,7 +463,7 @@ def generate_save_restore_ldi(mask_data, width_bytes, height):
 
     return save_code, restore_code
 
-def generate_save_restore_mem_stack(mask_data, width_bytes, height):
+def generate_save_restore_stack(mask_data, width_bytes, height):
     """Generate save/restore code that uses both memory access and stack"""
     mask_addrs = []
     stack_space = 0
@@ -585,41 +595,44 @@ def tile_to_code(args, img_tile, idx_tile):
     name = names[idx_tile] if idx_tile < len(names) else f'sprite{idx_tile}'
 
     shifted = args.shift != 0
-    width_bytes = (img_tile.width + 1) // 2
-    width, height = width_bytes * 2, img_tile.height
+    width_bytes0, width_bytes1 = (img_tile.width + 1) // 2, (img_tile.width + 2) // 2
+    height = img_tile.height
 
-    img0 = Image.new(img_tile.mode, (width, height))
-    img1 = Image.new(img_tile.mode, (width, height))
+    img0 = Image.new(img_tile.mode, (width_bytes0 * 2, height))
+    img1 = Image.new(img_tile.mode, (width_bytes1 * 2, height))
     img0.paste(img_tile, (0, 0))
     img1.paste(img_tile, (1, 0))
 
     image_data0, mask_data0 = image_data_bytes(img0.getdata())
     image_data1, mask_data1 = image_data_bytes(img1.getdata())
-    mask_data = list(map(operator.or_, mask_data0, mask_data1)) if shifted else mask_data0
-    no_image_data = [0] * len(mask_data)
-    full_mask_data = [0xff] * len(mask_data)
 
-    masked_code0 = generate_draw_poke(image_data0, mask_data0, width_bytes, height)
-    masked_code1 = generate_draw_poke(image_data1, mask_data1, width_bytes, height)
-    unmasked_code0 = generate_draw_poke(image_data0, mask_data0, width_bytes, height, masked=False)
-    unmasked_code1 = generate_draw_poke(image_data1, mask_data1, width_bytes, height, masked=False)
-    save_restore_mem_stack_code = generate_save_restore_mem_stack(mask_data, width_bytes, height)
-    save_restore_ldi_code = generate_save_restore_ldi(mask_data, width_bytes, height)
-    clear_poke_code = generate_draw_poke([0] * len(mask_data), mask_data, width_bytes, height, masked=False)
-    clear_push_code = generate_clear_push(mask_data, width_bytes, height)
-    rect_poke_code = generate_draw_poke(no_image_data, full_mask_data, width_bytes, height, masked=False)
-    rect_push_code = generate_clear_rect_push(width_bytes, height)
+    masked_code0 = generate_draw_poke(image_data0, mask_data0, width_bytes0, height)
+    masked_code1 = generate_draw_poke(image_data1, mask_data1, width_bytes1, height)
+    unmasked_code0 = generate_draw_poke(image_data0, mask_data0, width_bytes0, height, masked=False)
+    unmasked_code1 = generate_draw_poke(image_data1, mask_data1, width_bytes1, height, masked=False)
+    save_stack_code0, restore_stack_code0 = generate_save_restore_stack(mask_data0, width_bytes0, height)
+    save_stack_code1, restore_stack_code1 = generate_save_restore_stack(mask_data1, width_bytes1, height)
+    save_ldi_code0, restore_ldi_code0 = generate_save_restore_ldi(mask_data0, width_bytes0, height)
+    save_ldi_code1, restore_ldi_code1 = generate_save_restore_ldi(mask_data1, width_bytes1, height)
+    clear_poke_code0 = generate_draw_poke([0] * len(mask_data0), mask_data0, width_bytes0, height, masked=False)
+    clear_poke_code1 = generate_draw_poke([0] * len(mask_data1), mask_data1, width_bytes1, height, masked=False)
+    clear_push_code0 = generate_clear_push(mask_data0, width_bytes0, height)
+    clear_push_code1 = generate_clear_push(mask_data1, width_bytes1, height)
+    rect_poke_code0 = generate_draw_poke([0] * len(mask_data0), [0xff] * len(mask_data0), width_bytes0, height, masked=False)
+    rect_poke_code1 = generate_draw_poke([0] * len(mask_data1), [0xff] * len(mask_data1), width_bytes1, height, masked=False)
+    rect_push_code0 = generate_clear_rect_push(width_bytes0, height)
+    rect_push_code1 = generate_clear_rect_push(width_bytes1, height)
 
     if not args.quiet:
         print(f"Code timings for '{name}':")
         print(f" masked draw even/odd = {nominal_timing(masked_code0)}T / {nominal_timing(masked_code1)}T")
         print(f" unmasked draw even/odd = {nominal_timing(unmasked_code0)}T / {nominal_timing(unmasked_code1)}T")
-        print(f" save/restore (mem+stack) = {nominal_timing(save_restore_mem_stack_code[0])}T / {nominal_timing(save_restore_mem_stack_code[1])}T")
-        print(f" save/restore (ldi) = {nominal_timing(save_restore_ldi_code[0])}T / {nominal_timing(save_restore_ldi_code[1])}T")
-        print(f" clear (poke) = {nominal_timing(clear_poke_code)}T")
-        print(f" clear (push) = {nominal_timing(clear_push_code)}T")
-        print(f" clear rect (poke) = {nominal_timing(rect_poke_code)}T")
-        print(f" clear rect (push) = {nominal_timing(rect_push_code)}T")
+        print(f" save/restore (mem+stack) = {nominal_timing(save_stack_code0)}T / {nominal_timing(save_stack_code0)}T")
+        print(f" save/restore (ldi) = {nominal_timing(save_ldi_code0)}T / {nominal_timing(restore_ldi_code0)}T")
+        print(f" clear (poke) even/odd = {nominal_timing(clear_poke_code0)}T / {nominal_timing(clear_poke_code1)}T")
+        print(f" clear (push) even/odd = {nominal_timing(clear_push_code0)}T / {nominal_timing(clear_push_code1)}T")
+        print(f" clear rect (poke) even/odd = {nominal_timing(rect_poke_code0)}T / {nominal_timing(rect_poke_code1)}T")
+        print(f" clear rect (push) even/odd = {nominal_timing(rect_push_code0)}T / {nominal_timing(rect_push_code1)}T")
 
     code = "; tile2sam.py generated code\n\n"
     coord_code = ['srl h', 'rr l'] if args.low else ['scf', 'rr h', 'rr l']
@@ -630,35 +643,26 @@ def tile_to_code(args, img_tile, idx_tile):
         sys.exit(f"invalid routine(s): {invalid}\nvalid routines: {','.join(z80_routines)}")
 
     if 'masked' in routines:
-        label = f'masked_{name}'
-        if not shifted:
-            code += format_code(label, coord_code + masked_code0)
-        else:
-            code += format_code(label, coord_code + [f'jp c,{label}1'])
-            code += format_code(f'{label}0', masked_code0)
-            code += format_code(f'{label}1', masked_code1)
+        code += branched_code(f'masked_{name}', coord_code, masked_code0, masked_code1, shifted)
 
     if 'unmasked' in routines:
-        label = f'unmasked_{name}'
-        if not shifted:
-            code += format_code(label, coord_code + unmasked_code0)
-        else:
-            code += format_code(label, coord_code + [f'jp c,{label}1'])
-            code += format_code(f'{label}0', unmasked_code0)
-            code += format_code(f'{label}1', unmasked_code1)
+        code += branched_code(f'unmasked_{name}', coord_code, unmasked_code0, unmasked_code1, shifted)
 
     if 'save' in routines or 'restore' in routines:
-        save_code, restore_code = fastest_code(save_restore_mem_stack_code, save_restore_ldi_code)
-        code += format_code(f'save_{name}', coord_code + save_code)
-        code += format_code(f'restore_{name}', coord_code + restore_code)
+        save_code0, restore_code0 = fastest_code([save_stack_code0, restore_stack_code0], [save_ldi_code0, restore_ldi_code0])
+        save_code1, restore_code1 = fastest_code([save_stack_code1, restore_stack_code1], [save_ldi_code1, restore_ldi_code1])
+        code += branched_code(f'save_{name}', coord_code, save_code0, save_code1, shifted)
+        code += branched_code(f'restore_{name}', coord_code, restore_code0, restore_code1, shifted)
 
     if 'clear' in routines:
-        clear_code = coord_code + fastest_code([clear_poke_code], [clear_push_code])[0]
-        code += format_code(f'clear_{name}', clear_code)
+        clear_code0 = fastest_code([clear_poke_code0], [clear_push_code0])[0]
+        clear_code1 = fastest_code([clear_poke_code1], [clear_push_code1])[0]
+        code += branched_code(f'clear_{name}', coord_code, clear_code0, clear_code1, shifted)
 
     if 'rect' in routines:
-        rect_code = coord_code + fastest_code([rect_poke_code], [rect_push_code])[0]
-        code += format_code(f'clear_rect_{width_bytes}x{height}', rect_code)
+        rect_code0 = fastest_code([rect_poke_code0], [rect_push_code0])[0]
+        rect_code1 = fastest_code([rect_poke_code1], [rect_push_code1])[0]
+        code += branched_code(f'clear_rect_{width_bytes0}x{height}', coord_code, rect_code0, rect_code1, shifted)
 
     return code
 
