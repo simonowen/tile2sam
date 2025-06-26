@@ -771,10 +771,13 @@ def main(args):
 
     if code_text:
         filename = args.output or f"{basename}.asm"
-        with open(filename, 'a+' if args.append else 'w') as f:
-            f.write(code_text)
-        if not args.quiet:
-            print(f"Code {'appended' if args.append else 'written'} to {filename}")
+        if filename == "-":
+            print(code_text)
+        else:
+            with open(filename, 'a+' if args.append else 'w') as f:
+                f.write(code_text)
+            if not args.quiet:
+                print(f"Code {'appended' if args.append else 'written'} to {filename}")
 
     if args.pal:
         with open(f"{basename}.pal", 'wb') as f:
