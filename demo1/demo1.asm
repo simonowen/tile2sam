@@ -82,7 +82,6 @@ palette_end:
         defs 32
 new_stack:
 
-sprite0_buf: defs 6*11
-sprite1_buf: defs 6*11
-
         INC "sprite.asm"
+
+sprite0_buf: defs save_ghost_size

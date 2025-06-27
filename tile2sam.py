@@ -233,10 +233,10 @@ def branched_code(label, coord_code, code0, code1, shifted):
 def format_code(code):
     text = ''
     for line in code:
-        if line == '' or line.endswith(':'):
+        fields = line.split(' ', 1)
+        if line == '' or fields[0].endswith(':'):
             text += f'{line}\n'
         else:
-            fields = line.split(' ', 1)
             text += f"{' ' * 8}{fields[0]}{' ' * (5 - len(fields[0]))}{''.join(fields[1:])}\n"
     return text
 
@@ -492,7 +492,7 @@ def generate_save_restore_ldi(mask_data):
     save_code += ['ret']
     restore_code.append('ret')
 
-    return save_code, restore_code
+    return save_code, restore_code, len(image_addrs)
 
 def generate_save_restore_stack(mask_data):
     """Generate save/restore code that uses both memory access and stack"""
@@ -514,7 +514,8 @@ def generate_save_restore_stack(mask_data):
 
     last_addr = 0
     first_byte = True
-    save_code = ['ex de,hl', 'ld (@+sp_restore+1),sp', f'ld bc,{(stack_space + 1) & ~1}', 'add hl,bc', 'ld sp,hl', 'ex de,hl']
+    save_size = (stack_space + 1) & ~1
+    save_code = ['ex de,hl', 'ld (@+sp_restore+1),sp', f'ld bc,{save_size}', 'add hl,bc', 'ld sp,hl', 'ex de,hl']
 
     for addr in mask_addrs:
         save_code += reg16_change(last_addr, addr, spare_pair='bc')[0]
@@ -552,7 +553,7 @@ def generate_save_restore_stack(mask_data):
 
     restore_code += ['@sp_restore:', 'ld sp,0', 'ret']
 
-    return save_code, restore_code
+    return save_code, restore_code, save_size
 
 def generate_clear_push(mask_data):
     """Generate display clear code that (mostly) uses the stack"""
@@ -641,10 +642,10 @@ def tile_to_code(args, img_tile, idx_tile):
     masked_code1 = generate_draw_poke(image_data1, mask_data1)
     unmasked_code0 = generate_draw_poke(image_data0, mask_data0, masked=False)
     unmasked_code1 = generate_draw_poke(image_data1, mask_data1, masked=False)
-    save_stack_code0, restore_stack_code0 = generate_save_restore_stack(mask_data0)
-    save_stack_code1, restore_stack_code1 = generate_save_restore_stack(mask_data1)
-    save_ldi_code0, restore_ldi_code0 = generate_save_restore_ldi(mask_data0)
-    save_ldi_code1, restore_ldi_code1 = generate_save_restore_ldi(mask_data1)
+    save_stack_code0, restore_stack_code0, save_stack_size0 = generate_save_restore_stack(mask_data0)
+    save_stack_code1, restore_stack_code1, save_stack_size1 = generate_save_restore_stack(mask_data1)
+    save_ldi_code0, restore_ldi_code0, save_ldi_size0 = generate_save_restore_ldi(mask_data0)
+    save_ldi_code1, restore_ldi_code1, save_ldi_size1 = generate_save_restore_ldi(mask_data1)
     clear_poke_code0 = generate_draw_poke(None, mask_data0, masked=False)
     clear_poke_code1 = generate_draw_poke(None, mask_data1, masked=False)
     clear_push_code0 = generate_clear_push(mask_data0)
@@ -684,6 +685,11 @@ def tile_to_code(args, img_tile, idx_tile):
         save_code1, restore_code1 = fastest_code([save_stack_code1, restore_stack_code1], [save_ldi_code1, restore_ldi_code1])
         code += branched_code(f'save_{name}', coord_code, save_code0, save_code1, shifted)
         code += branched_code(f'restore_{name}', coord_code, restore_code0, restore_code1, shifted)
+
+        save_stack_size = max(save_stack_size0, save_stack_size1)
+        save_ldi_size = max(save_ldi_size0, save_ldi_size1)
+        save_size = save_stack_size if any([x for x in save_code0 if ',sp' in x]) else save_ldi_size
+        code += [f'save_{name}_size: equ {save_size}']
 
     if 'clear' in routines:
         clear_code0 = fastest_code([clear_poke_code0], [clear_push_code0])[0]

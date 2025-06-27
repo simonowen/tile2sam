@@ -98,6 +98,7 @@ instead of binary graphics data. The available routines are:
 
 - Specifying `save` or `restore` generates both routines, since each is useless
   without the other.
+- A save_*name*_size symbol is defined to hold the save buffer size in bytes.
 - `rect` generates a label name using the width (in bytes) and height of the
   sprite. To avoid duplicate labels and code this should generally be given as
   the only routine, once per sprite size.
