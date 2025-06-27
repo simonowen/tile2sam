@@ -203,18 +203,20 @@ def fastest_code(*code):
 def branched_code(label, coord_code, code0, code1, shifted):
     """Return code with a branch to the second code block if needed"""
     if not shifted or code0 == code1:
-        return format_code(label, coord_code + code0)
+        return ('', f'{label}:', *coord_code, *code0)
 
     label0, label1 = f'{label}_0', f'{label}_1'
-    return (format_code(label, coord_code + [f'jp c,{label1}']) +
-            format_code(label0, code0) +
-            format_code(label1, code1))
+    return ['', f'{label}:', *coord_code, f'jp c,{label1}', f'{label0}:', *code0, f'{label1}:', *code1]
 
-def format_code(label, code):
-    indent = ' ' * 8
-    text = f'{label}:\n' if label else ''
-    text += indent + f'\n{indent}'.join(code) + '\n\n'
-    return re.sub(r'^\s+(@?\w+:)', r'\1', text, flags=re.MULTILINE)
+def format_code(code):
+    text = ''
+    for line in code:
+        if line == '' or line.endswith(':'):
+            text += f'{line}\n'
+        else:
+            fields = line.split(' ', 1)
+            text += f"{' ' * 8}{fields[0]}{' ' * (5 - len(fields[0]))}{''.join(fields[1:])}\n"
+    return text
 
 class ValueStream:
     def __init__(self, data, *, regs):
@@ -641,7 +643,7 @@ def tile_to_code(args, img_tile, idx_tile):
         print(f" clear rect (poke) even/odd = {nominal_timing(rect_poke_code0)}T / {nominal_timing(rect_poke_code1)}T")
         print(f" clear rect (push) even/odd = {nominal_timing(rect_push_code0)}T / {nominal_timing(rect_push_code1)}T")
 
-    code = "; tile2sam.py generated code\n\n"
+    code = []
     coord_code = ['srl h', 'rr l'] if args.low else ['scf', 'rr h', 'rr l']
 
     routines = [x.strip() for x in args.code.split(',')]
@@ -671,7 +673,7 @@ def tile_to_code(args, img_tile, idx_tile):
         rect_code1 = fastest_code([rect_poke_code1], [rect_push_code1])[0]
         code += branched_code(f'clear_rect_{width_bytes}x{height}', coord_code, rect_code0, rect_code1, shifted)
 
-    return code
+    return format_code(code)
 
 def tile_to_data(args, img_tile):
     """Convert colour indices to display and mask byte data"""
@@ -782,6 +784,7 @@ def main(args):
             print(code_text)
         else:
             with open(filename, 'a+' if args.append else 'w') as f:
+                f.write("; tile2sam.py generated code\n")
                 f.write(code_text)
             if not args.quiet:
                 print(f"Code {'appended' if args.append else 'written'} to {filename}")
