@@ -34,7 +34,6 @@ instr_timings = [
     (r'ex de,hl', 1, 4),
     (r'scf', 1, 4),
     (r'ret', 1, 12),
-    (r'd(ef)?s\s+\d+', 0, 0),                           # ds/defs
     (r'@?\w+:', 0, 0),                                  # label
     (r'', 0, 0),
 ]
@@ -186,6 +185,13 @@ def rect_mask(mask_data):
 ###############################################################################
 # Code Generation Helpers
 
+def code_size(instrs):
+    """Return the size of a list of instructions in bytes"""
+    instrs = [instr.strip() for instr in instrs]
+    return sum([next(size
+        for regex,size,_ in instr_timings if re.fullmatch(regex, instr))
+            for instr in instrs])
+
 def nominal_timing(instrs):
     instrs = [instr.strip() for instr in instrs]
     unknown = [instr for instr in instrs if not [regex for regex,_,_ in instr_timings if re.fullmatch(regex, instr)]]
@@ -194,7 +200,7 @@ def nominal_timing(instrs):
     #debug = { instr:[tstates for regex,size,tstates in instr_timings if re.fullmatch(regex, instr)][0] for instr in instrs }
 
     return sum([next(tstates
-        for regex,size,tstates in instr_timings if re.fullmatch(regex, instr))
+        for regex,_,tstates in instr_timings if re.fullmatch(regex, instr))
             for instr in instrs])
 
 def fastest_code(*code):
@@ -205,8 +211,24 @@ def branched_code(label, coord_code, code0, code1, shifted):
     if not shifted or code0 == code1:
         return ('', f'{label}:', *coord_code, *code0)
 
-    label0, label1 = f'{label}_0', f'{label}_1'
-    return ['', f'{label}:', *coord_code, f'jp c,{label1}', f'{label0}:', *code0, f'{label1}:', *code1]
+    carry_regex = r'^(ret|inc|dec|and|or|xor|sub|sbc|add|adc|ld\s+\(.*?\),sp)'
+    common = []
+    for a,b in zip(code0, code1):
+        if a != b or re.match(carry_regex, a):
+            break
+        common.append(a)
+
+    code0, code1 = code0[len(common):], code1[len(common):]
+    code = ['', f'{label}:', *coord_code, *common]
+
+    if len(code0) == 1:
+        code += ['ret nc', *code1]
+    elif len(code1) == 1:
+        code += ['ret c', *code0]
+    else:
+        code += [f'jr c,{label}_1' if code_size(code0) < 128 else f'jp c,{label}_1']
+        code += [f'{label}_0:', *code0, f'{label}_1:', *code1]
+    return code
 
 def format_code(code):
     text = ''
@@ -492,7 +514,7 @@ def generate_save_restore_stack(mask_data):
 
     last_addr = 0
     first_byte = True
-    save_code = ['ld (@+sp_restore+1),sp', 'ex de,hl', f'ld bc,{(stack_space + 1) & ~1}', 'add hl,bc', 'ld sp,hl', 'ex de,hl']
+    save_code = ['ex de,hl', 'ld (@+sp_restore+1),sp', f'ld bc,{(stack_space + 1) & ~1}', 'add hl,bc', 'ld sp,hl', 'ex de,hl']
 
     for addr in mask_addrs:
         save_code += reg16_change(last_addr, addr, spare_pair='bc')[0]
@@ -509,7 +531,7 @@ def generate_save_restore_stack(mask_data):
         save_code.append('push de')
 
     save_code += ['@sp_restore:', 'ld sp,0', 'ret']
-    restore_code = ['ld (@+sp_restore+1),sp', 'ex de,hl', 'ld sp,hl', 'ex de,hl']
+    restore_code = ['ex de,hl', 'ld (@+sp_restore+1),sp', 'ld sp,hl', 'ex de,hl']
 
     last_addr = 0
     first_byte = (stack_space & 1) == 0
