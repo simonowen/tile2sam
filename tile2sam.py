@@ -642,6 +642,10 @@ def tile_to_code(args, img_tile, idx_tile):
     image_data0, mask_data0 = [group_split(x, width_bytes) for x in image_data_bytes(img0.getdata())]
     image_data1, mask_data1 = [group_split(x, width_bytes) for x in image_data_bytes(img1.getdata())]
 
+    if args.share:
+        mask_data_share = [list(map(operator.or_, a, b)) for a,b in zip(mask_data0, mask_data1)] if shifted else mask_data0
+        mask_data0 = mask_data1 = mask_data_share
+
     masked_code0 = generate_draw_poke(image_data0, mask_data0)
     masked_code1 = generate_draw_poke(image_data1, mask_data1)
     unmasked_code0 = generate_draw_poke(image_data0, mask_data0, masked=False)
@@ -850,6 +854,7 @@ if __name__ == "__main__":
     parser.add_argument('--crop', help="crop region (WxH or WxH+X+Y)")
     parser.add_argument('--scale', help="scale region (S or HxV)")
     parser.add_argument('--shift', default=None, type=int, help="pixels to shift right")
+    parser.add_argument('--share', default=False, action='store_true', help="share even/odd save/restore code")
     parser.add_argument('image')
     parser.add_argument('tilesize')
     main(parser.parse_args())
