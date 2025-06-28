@@ -208,6 +208,9 @@ def fastest_code(*code):
 
 def branched_code(label, coord_code, code0, code1, shifted):
     """Return code with a branch to the second code block if needed"""
+    if len(code0) == 1 and len(code1) == 1:
+        coord_code = []
+
     if not shifted or code0 == code1:
         return ('', f'{label}:', *coord_code, *code0)
 
@@ -477,8 +480,7 @@ def generate_save_restore_ldi(mask_data):
                     image_addrs.append(addr)
 
     last_addr = 0
-    save_code = []
-    restore_code = ['ex de,hl']
+    save_code, restore_code = [], []
 
     for addr in image_addrs:
         save_code += reg16_change(last_addr, addr, spare_pair='bc')[0]
@@ -490,6 +492,8 @@ def generate_save_restore_ldi(mask_data):
         last_addr = addr + 1
 
     save_code += ['ret']
+    if len(restore_code) > 0:
+        restore_code.insert(0, 'ex de,hl')
     restore_code.append('ret')
 
     return save_code, restore_code, len(image_addrs)
