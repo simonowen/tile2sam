@@ -379,7 +379,7 @@ def reg16_change(a, b, *, reg='hl', spare_pair=None, value_stream=None):
     elif a != b:
         delta = b - a
 
-        if spare_pair:
+        if spare_pair and reg == 'hl':
             code = [f'ld {spare_pair},{delta}', f'add hl,{spare_pair}']
         else:
             dist = abs(delta)
