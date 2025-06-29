@@ -28,6 +28,7 @@ instr_timings = [
     (r'(inc|dec|and|or|xor|sub)\s+[bcdehla]', 1, 4),    # inc|dec|and|or|xor r
     (r'(inc|dec|and|or|xor|sub)\s+.*', 2, 8),           # inc|dec|and|or|xor n
     (r'(inc|dec)\s+\w\w', 1, 8),                        # inc|dec rr
+    (r'(set|res)\s+\d,\w', 2, 8),                       # res|set b,r
     (r'(ldi|ldd)', 2, 20),
     (r'(pop\s+\w\w)', 1, 12),
     (r'(push\s+\w\w)', 1, 16),
@@ -38,7 +39,7 @@ instr_timings = [
     (r'', 0, 0),
 ]
 
-z80_routines = ['unmasked', 'masked', 'save', 'restore', 'clear', 'rect']
+z80_routines = ['unmasked', 'masked', 'save', 'restore', 'copy', 'clear', 'rect']
 
 def bpp_from_mode(m):
     if m not in [1, 2, 3, 4]:
@@ -559,6 +560,47 @@ def generate_save_restore_stack(mask_data):
 
     return save_code, restore_code, save_size
 
+def generate_restore_copy(mask_data, *, low=False):
+    """Generate restore by copying from screen in other 32K"""
+    image_addrs, next_dir = [], []
+    width_bytes, height = len(mask_data[0]), len(mask_data)
+    dx = 1
+
+    # Even lines down, odd lines up, in zig-zag pattern
+    for p in range(2):
+        for y in range(0, height, 2) if p == 0 else reversed(range(1, height, 2)):
+            for x in range(width_bytes) if dx > 0 else reversed(range(width_bytes)):
+                if mask_data[y][x]:
+                    addr = y * 128 + x
+                    image_addrs.append(addr)
+                    if len(image_addrs) > 1:
+                        next_dir.append(-1 if (image_addrs[-1]&0x7f) < (image_addrs[-2]&0x7f) else 1)
+            dx = -dx
+    next_dir.append(next_dir[-1] if next_dir else 1)  # duplicate final direction, if any
+
+    addr_flip = 1 << 15
+    last_src, last_dst = None, 0
+
+    restore_code = []
+    sync_de_code = ['ld d,h', 'ld e,l', 'res 7,d' if low else 'set 7,d',]
+
+    for addr,dir in zip(image_addrs, next_dir):
+        restore_code += reg16_change(last_dst, addr, reg='hl', spare_pair='bc')[0]
+
+        if last_src is None:
+            restore_code += sync_de_code
+        else:
+            change_de_code = reg16_change(last_src, addr ^ addr_flip, reg='de', spare_pair='bc')[0]
+            restore_code += sync_de_code if nominal_timing(change_de_code) > nominal_timing(sync_de_code) else change_de_code
+
+        restore_code.append('ldi' if dir > 0 else 'ldd')
+        last_dst = addr + dir
+        last_src = last_dst ^ addr_flip
+
+    restore_code.append('ret')
+
+    return restore_code
+
 def generate_clear_push(mask_data):
     """Generate display clear code that (mostly) uses the stack"""
     line_ends = []
@@ -654,6 +696,8 @@ def tile_to_code(args, img_tile, idx_tile):
     save_stack_code1, restore_stack_code1, save_stack_size1 = generate_save_restore_stack(mask_data1)
     save_ldi_code0, restore_ldi_code0, save_ldi_size0 = generate_save_restore_ldi(mask_data0)
     save_ldi_code1, restore_ldi_code1, save_ldi_size1 = generate_save_restore_ldi(mask_data1)
+    restore_copy_code0 = generate_restore_copy(mask_data0, low=args.low)
+    restore_copy_code1 = generate_restore_copy(mask_data1, low=args.low)
     clear_poke_code0 = generate_draw_poke(None, mask_data0, masked=False)
     clear_poke_code1 = generate_draw_poke(None, mask_data1, masked=False)
     clear_push_code0 = generate_clear_push(mask_data0)
@@ -669,6 +713,7 @@ def tile_to_code(args, img_tile, idx_tile):
         print(f"  unmasked draw even/odd = {nominal_timing(unmasked_code0)}T / {nominal_timing(unmasked_code1)}T")
         print(f"  save/restore (mem+stack) = {nominal_timing(save_stack_code0)}T / {nominal_timing(save_stack_code0)}T")
         print(f"  save/restore (ldi) = {nominal_timing(save_ldi_code0)}T / {nominal_timing(restore_ldi_code0)}T")
+        print(f"  restore (screen) even/odd = {nominal_timing(restore_copy_code0)}T / {nominal_timing(restore_copy_code1)}T")
         print(f"  clear (poke) even/odd = {nominal_timing(clear_poke_code0)}T / {nominal_timing(clear_poke_code1)}T")
         print(f"  clear (push) even/odd = {nominal_timing(clear_push_code0)}T / {nominal_timing(clear_push_code1)}T")
         print(f"  clear rect (poke) even/odd = {nominal_timing(rect_poke_code0)}T / {nominal_timing(rect_poke_code1)}T")
@@ -698,6 +743,10 @@ def tile_to_code(args, img_tile, idx_tile):
         save_ldi_size = max(save_ldi_size0, save_ldi_size1)
         save_size = save_stack_size if any([x for x in save_code0 if ',sp' in x]) else save_ldi_size
         code += [f'save_{name}_size: equ {save_size}']
+
+    if 'copy' in routines:
+        coord_src_code = ['scf', 'rr h', 'rr l'] if args.low else ['srl h', 'rr l']
+        code += branched_code(f'copy_{name}', coord_src_code, restore_copy_code0, restore_copy_code1, shifted)
 
     if 'clear' in routines:
         clear_code0 = fastest_code([clear_poke_code0], [clear_push_code0])[0]
