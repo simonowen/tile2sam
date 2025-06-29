@@ -663,16 +663,16 @@ def tile_to_code(args, img_tile, idx_tile):
     rect_push_code0 = generate_clear_rect_push(width_bytes0, height)
     rect_push_code1 = generate_clear_rect_push(width_bytes1, height)
 
-    if not args.quiet:
+    if args.timings:
         print(f"Code timings for '{name}':")
-        print(f" masked draw even/odd = {nominal_timing(masked_code0)}T / {nominal_timing(masked_code1)}T")
-        print(f" unmasked draw even/odd = {nominal_timing(unmasked_code0)}T / {nominal_timing(unmasked_code1)}T")
-        print(f" save/restore (mem+stack) = {nominal_timing(save_stack_code0)}T / {nominal_timing(save_stack_code0)}T")
-        print(f" save/restore (ldi) = {nominal_timing(save_ldi_code0)}T / {nominal_timing(restore_ldi_code0)}T")
-        print(f" clear (poke) even/odd = {nominal_timing(clear_poke_code0)}T / {nominal_timing(clear_poke_code1)}T")
-        print(f" clear (push) even/odd = {nominal_timing(clear_push_code0)}T / {nominal_timing(clear_push_code1)}T")
-        print(f" clear rect (poke) even/odd = {nominal_timing(rect_poke_code0)}T / {nominal_timing(rect_poke_code1)}T")
-        print(f" clear rect (push) even/odd = {nominal_timing(rect_push_code0)}T / {nominal_timing(rect_push_code1)}T")
+        print(f"  masked draw even/odd = {nominal_timing(masked_code0)}T / {nominal_timing(masked_code1)}T")
+        print(f"  unmasked draw even/odd = {nominal_timing(unmasked_code0)}T / {nominal_timing(unmasked_code1)}T")
+        print(f"  save/restore (mem+stack) = {nominal_timing(save_stack_code0)}T / {nominal_timing(save_stack_code0)}T")
+        print(f"  save/restore (ldi) = {nominal_timing(save_ldi_code0)}T / {nominal_timing(restore_ldi_code0)}T")
+        print(f"  clear (poke) even/odd = {nominal_timing(clear_poke_code0)}T / {nominal_timing(clear_poke_code1)}T")
+        print(f"  clear (push) even/odd = {nominal_timing(clear_push_code0)}T / {nominal_timing(clear_push_code1)}T")
+        print(f"  clear rect (poke) even/odd = {nominal_timing(rect_poke_code0)}T / {nominal_timing(rect_poke_code1)}T")
+        print(f"  clear rect (push) even/odd = {nominal_timing(rect_push_code0)}T / {nominal_timing(rect_push_code1)}T")
 
     code = []
     coord_code = ['srl h', 'rr l'] if args.low else ['scf', 'rr h', 'rr l']
@@ -855,6 +855,7 @@ if __name__ == "__main__":
     parser.add_argument('--scale', help="scale region (S or HxV)")
     parser.add_argument('--shift', default=None, type=int, help="pixels to shift right")
     parser.add_argument('--share', default=False, action='store_true', help="share even/odd save/restore code")
+    parser.add_argument('--timings', default=False, action='store_true', help="show nominal code timings")
     parser.add_argument('image')
     parser.add_argument('tilesize')
     main(parser.parse_args())
