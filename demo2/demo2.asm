@@ -25,16 +25,18 @@ save_buffers: equ &f000
         ld   a,4+mode4
         out  (vmpr),a
         ld   sp,base
-        ld   hl,palette_end-1
-        ld   c,&f8
-        ld   b,palette_end-palette
-        otdr
         jp   init
 
 init:   call flip
         call grid
         call flip
         call grid
+
+        ld   hl,palette_end-1
+        ld   c,&f8
+        ld   b,palette_end-palette
+        otdr
+
         ei
         jr  $
 
@@ -244,7 +246,7 @@ sprite1:
         db 1, &5e,&73, 1,1
         db 2, &18,&9a, -1,1
         db 3, &71,&26, 1,-1
-        db 4, &de,&0b, -1,-1
+        db 4, &7e,&0b, 1,-1
         db 5, &4a,&59, -1,1
         db 6, &21,&a3, -1,-1
         db 7, &e4,&6f, 1,-1
@@ -256,13 +258,14 @@ sprite1:
         db 5, &9f,&9d, 1,1
         db 6, &a5,&ac, -1,1
         db 7, &7d,&77, -1,-1
-        db 0, &99,&76, 1,-1
+        db 0, &99,&76, -1,-1
         db 1, &1e,&62, 1,1
         db 2, &3d,&9c, -1,-1
         db 3, &9d,&27, 1,1
-        db 4, &28,&a3, 1,-1
+        db 4, &d8,&a3, -1,-1
         db 5, &99,&83, -1,1
         db 6, &6d,&52, 1,-1
+        db 7, &82,&7e, 1,1
 sprite_end:
 
 num_sprites: equ (sprite_end-sprite0) / (sprite1-sprite0)
