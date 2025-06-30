@@ -1,12 +1,12 @@
 .PHONY: clean
 
-NAME=demo2
+NAME=demo4
 
 ${NAME}.dsk:    ${NAME}.asm sprites.asm
 	@pyz80.py -I samdos2 --mapfile=${NAME}.map ${NAME}.asm
 
 sprites.asm:	sprites.png
-	@../tile2sam.py -q sprites.png 12x11 --code masked,copy --names cherry,strawb,orange,bell,apple,grapes,galax,key --pal
+	@../tile2sam.py -q sprites.png 12x11 --code unmasked,clear --names cherry,strawb,orange,bell,apple,grapes,galax,key --pal
 
 clean:
 	rm -f ${NAME}.dsk ${NAME}.map sprites.pal sprites.asm

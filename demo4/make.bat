@@ -5,7 +5,7 @@ set NAME=demo4
 
 if "%1"=="clean" goto clean
 
-..\tile2sam.py -q sprites.png 12x11 --code masked,copy --names cherry,strawb,orange,bell,apple,grapes,galax,key --pal --low %*
+..\tile2sam.py -q sprites.png 12x11 --code unmasked,clear --names cherry,strawb,orange,bell,apple,grapes,galax,key --pal %*
 if errorlevel 1 goto end
 pyz80.py -I samdos2 --mapfile=%NAME%.map %NAME%.asm
 if errorlevel 1 goto end
