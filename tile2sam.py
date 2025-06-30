@@ -215,10 +215,10 @@ def branched_code(label, coord_code, code0, code1, shifted):
     if not shifted or code0 == code1:
         return ('', f'{label}:', *coord_code, *code0)
 
-    carry_regex = r'^(ret|inc|dec|and|or|xor|sub|sbc|add|adc|ld\s+\(.*?\),sp)'
+    end_regex = r'^(ret|and|or|xor|sub|sbc|add|adc|ld\s+\(.*?\),sp)'
     common = []
     for a,b in zip(code0, code1):
-        if a != b or re.match(carry_regex, a):
+        if a != b or re.match(end_regex, a):
             break
         common.append(a)
 
