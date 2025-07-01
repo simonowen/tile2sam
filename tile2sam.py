@@ -41,10 +41,13 @@ instr_timings = [
 
 z80_routines = ['unmasked', 'masked', 'save', 'restore', 'copy', 'clear', 'rect']
 
+
 def bpp_from_mode(m):
+    """Return bits per pixel for given screen mode"""
     if m not in [1, 2, 3, 4]:
         sys.exit(f"error: invalid screen mode ({m}), must be 1-4")
     return [1, 1, 2, 4][m - 1]
+
 
 def rgb_from_index(i):
     """Map SAM palette index to RGB tuple"""
@@ -54,29 +57,33 @@ def rgb_from_index(i):
     blue = intensities[((i & 0x01) << 1) | ((i & 0x10) >> 2) | ((i & 0x08) >> 3)]
     return (red, green, blue)
 
+
 def generate_sam_palette():
     """Create a list of RGB values for the SAM palette of 128 colours"""
     palette = [rgb_from_index(i) for i in range(128)]
     return palette
+
 
 def colour_distance_squared(colour1, colour2):
     """Square of the Euclidian distance between two colours"""
     dist_squared = sum((a - b) ** 2 for a, b in zip(colour1, colour2))
     return dist_squared
 
+
 def closest_palette_index(colour, palette):
     """Return the palette index that best matches the supplied RGB colour"""
-    dists_squared = {colour_distance_squared(colour, c) : c for c in palette}
+    dists_squared = {colour_distance_squared(colour, c): c for c in palette}
     closest_index = dists_squared[min(dists_squared)]
     idx = [i for i, c in enumerate(palette) if c == closest_index][0]
     return idx
+
 
 def palettise_image(img, palette):
     """Map image to nearest colours in a given palette"""
     img_palette = img.getcolors()
     if img_palette is None:
         sys.exit("error: source image has too many colours!")
-    col_map = {x[1] : closest_palette_index(x[1], palette) for x in img_palette}
+    col_map = {x[1]: closest_palette_index(x[1], palette) for x in img_palette}
 
     img_pal = Image.new('P', img.size)
     img_pal.putpalette([c for tup in palette for c in tup])
@@ -91,6 +98,7 @@ def palettise_image(img, palette):
 
     return img_pal
 
+
 def read_palette(pal):
     """Read palette from file, or as colour list"""
     try:
@@ -102,15 +110,18 @@ def read_palette(pal):
         except ValueError:
             sys.exit("error: invalid colour list")
 
+
 def clut_index(colour, clut):
     """Return the (first) CLUT index corresponding to the supplied colour"""
     matches = [i for i, c in enumerate(clut) if c == colour]
     return matches[0]
 
+
 def clutise_image(img, clut):
     """Map palette colour indicies to colour look-up table indices"""
-    col_map = {x[1] : clut_index(x[1], clut) for x in img.getcolors()}
+    col_map = {x[1]: clut_index(x[1], clut) for x in img.getcolors()}
     return img.point(lambda i: col_map.get(i, 0))
+
 
 def crop_image(img, geometry):
     """Clip image to given geometry string"""
@@ -126,6 +137,7 @@ def crop_image(img, geometry):
     except (ValueError, IndexError):
         sys.exit("error: invalid crop region (should be WxH or WxH+X+H)")
 
+
 def scale_image(img, scale):
     """Scale image by given factor(s)"""
     try:
@@ -134,6 +146,7 @@ def scale_image(img, scale):
     except (ValueError, IndexError):
         sys.exit("error: invalid scale factors")
 
+
 def get_tile_size(size):
     """Return width and height given a 1D or 2D size"""
     try:
@@ -141,6 +154,7 @@ def get_tile_size(size):
         return dimensions[:2]
     except (ValueError, IndexError):
         sys.exit("error: invalid tile dimensions")
+
 
 def get_tile_selection(tile_select, max_tiles):
     """Determine the tile selection to extract"""
@@ -160,22 +174,25 @@ def get_tile_selection(tile_select, max_tiles):
             sys.exit("error: invalid tile count or range")
     return selection
 
+
 def group_split(items, group_size):
     """Split a list into groups of a given size"""
     it = iter(items)
     return list(zip(*[it] * group_size))
 
+
 def image_data_bytes(img_data, bpp=4):
     """Convert CLUT entries to SAM display byte rows"""
     byte_groups = group_split(img_data, 8 // bpp)
     data_bytes = [sum([n << (bpp * i)
-                    for i,n in enumerate(reversed(t))]) for t in byte_groups]
+                      for i, n in enumerate(reversed(t))]) for t in byte_groups]
 
     mask_value = (1 << bpp) - 1
     mask_bytes = [sum([(mask_value if n else 0) << (bpp * i)
-                    for i,n in enumerate(reversed(t))]) for t in byte_groups]
+                      for i, n in enumerate(reversed(t))]) for t in byte_groups]
 
     return data_bytes, mask_bytes
+
 
 def rect_mask(mask_data):
     """Set all nibbles in a mask for a rectangle"""
@@ -186,26 +203,32 @@ def rect_mask(mask_data):
 ###############################################################################
 # Code Generation Helpers
 
+
 def code_size(instrs):
     """Return the size of a list of instructions in bytes"""
     instrs = [instr.strip() for instr in instrs]
     return sum([next(size
-        for regex,size,_ in instr_timings if re.fullmatch(regex, instr))
-            for instr in instrs])
+               for regex, size, _ in instr_timings if re.fullmatch(regex, instr))
+                for instr in instrs])
+
 
 def nominal_timing(instrs):
+    """Return the nominal timing of a list of instructions in t-states"""
     instrs = [instr.strip() for instr in instrs]
-    unknown = [instr for instr in instrs if not [regex for regex,_,_ in instr_timings if re.fullmatch(regex, instr)]]
+    unknown = [instr for instr in instrs if not [regex for regex, _, _ in instr_timings if re.fullmatch(regex, instr)]]
     if unknown:
         sys.exit(f'error: no timings for instruction(s): {unknown}')
-    #debug = { instr:[tstates for regex,size,tstates in instr_timings if re.fullmatch(regex, instr)][0] for instr in instrs }
+    # debug = { instr:[tstates for regex,size,tstates in instr_timings if re.fullmatch(regex, instr)][0] for instr in instrs }
 
     return sum([next(tstates
-        for regex,_,tstates in instr_timings if re.fullmatch(regex, instr))
-            for instr in instrs])
+               for regex, _, tstates in instr_timings if re.fullmatch(regex, instr))
+                for instr in instrs])
+
 
 def fastest_code(*code):
+    """Return the code blocks with the lowest nominal timing"""
     return min(*code, key=lambda x: sum(nominal_timing(z) for z in x))
+
 
 def branched_code(label, coord_code, code0, code1, shifted):
     """Return code with a branch to the second code block if needed"""
@@ -217,7 +240,7 @@ def branched_code(label, coord_code, code0, code1, shifted):
 
     end_regex = r'^(ret|and|or|xor|sub|sbc|add|adc|ld\s+\(.*?\),sp)'
     common = []
-    for a,b in zip(code0, code1):
+    for a, b in zip(code0, code1):
         if a != b or re.match(end_regex, a):
             break
         common.append(a)
@@ -234,7 +257,9 @@ def branched_code(label, coord_code, code0, code1, shifted):
         code += [f'{label}_0:', *code0, f'{label}_1:', *code1]
     return code
 
+
 def format_code(code):
+    """Format code for output, aligning instructions and operands"""
     text = ''
     for line in code:
         fields = line.split(' ', 1)
@@ -243,6 +268,7 @@ def format_code(code):
         else:
             text += f"{' ' * 8}{fields[0]}{' ' * (5 - len(fields[0]))}{''.join(fields[1:])}\n"
     return text
+
 
 class ValueStream:
     def __init__(self, data, *, regs):
@@ -273,7 +299,7 @@ class ValueStream:
         last = {}
         cacheable = []
 
-        for i,b in enumerate(data):
+        for i, b in enumerate(data):
             count[b] = count.get(b, 0) + 1
             first[b] = first.get(b, i)
             last[b] = i
@@ -308,13 +334,13 @@ class ValueStream:
 
         cacheable = self.get_cacheable(data)
 
-        for i,b in enumerate(data):
+        for i, b in enumerate(data):
             if data[i] not in cache:
                 scoped = [(val, first - i) for val, first, last in cacheable if i <= last]
                 pending = [x[0] for x in sorted(scoped, key=lambda kv: kv[1])][:len(self.regs)]
 
                 if data[i] in pending:
-                    cache = { k: v for k, v in cache.items() if k in pending }
+                    cache = {k: v for k, v in cache.items() if k in pending}
                     adding = [x for x in pending if x not in cache]
                     free = ''.join([r for r in self.regs if r not in cache.values()])
 
@@ -327,7 +353,7 @@ class ValueStream:
                             r = free[0]
                             code.append(f'ld {r},&{adding[0]:02x}')
 
-                        cache.update({ adding[idx]: r[idx] for idx in range(len(r)) })
+                        cache.update({adding[idx]: r[idx] for idx in range(len(r))})
                         adding = adding[len(r):]
                         free = free.replace(r, '')
 
@@ -338,10 +364,12 @@ class ValueStream:
 
         return values, changes
 
+
 def reg8_delta(a, b):
     """Determine 8-bit difference, allowing wrap-around"""
     delta = b - a if b > a else 256 + b - a
     return delta - 256 if delta > 127 else delta
+
 
 def reg8_change(a, b, *, reg, value_stream=None):
     """Change an 8-bit register from a to b"""
@@ -362,6 +390,7 @@ def reg8_change(a, b, *, reg, value_stream=None):
         code.append(f'ld {reg},a')
 
     return code, values
+
 
 def reg16_change(a, b, *, reg='hl', spare_pair=None, value_stream=None):
     """Change register pair from a to b"""
@@ -394,7 +423,7 @@ def reg16_change(a, b, *, reg='hl', spare_pair=None, value_stream=None):
             if delta > 0 and delta < 256:
                 code += [f'adc a,{reg[0]}', f'sub {reg[1]}', f'ld {reg[0]},a']
             elif delta < 0 and delta > -256:
-                code += [f'sbc a,a', f'add a,{reg[0]}', f'ld {reg[0]},a']
+                code += ['sbc a,a', f'add a,{reg[0]}', f'ld {reg[0]},a']
             else:
                 val = value_stream.next_value(code) if value_stream else dist >> 8
                 values.append(val)
@@ -407,6 +436,7 @@ def reg16_change(a, b, *, reg='hl', spare_pair=None, value_stream=None):
 
 ###############################################################################
 # Routine Generators
+
 
 def generate_draw_poke(image_data, mask_data, *, masked=True):
     """Generate drawing code that pokes data into memory"""
@@ -467,6 +497,7 @@ def generate_draw_poke(image_data, mask_data, *, masked=True):
     code.append('ret')
     return code
 
+
 def generate_save_restore_ldi(mask_data):
     """Generate save/restore code that uses LDI"""
     image_addrs = []
@@ -475,7 +506,7 @@ def generate_save_restore_ldi(mask_data):
     # Even lines down, odd lines up, all left-to-right
     for p in range(2):
         for y in range(0, height, 2) if p == 0 else reversed(range(1, height, 2)):
-            for x in range (width_bytes):
+            for x in range(width_bytes):
                 if mask_data[y][x]:
                     addr = y * 128 + x
                     image_addrs.append(addr)
@@ -498,6 +529,7 @@ def generate_save_restore_ldi(mask_data):
     restore_code.append('ret')
 
     return save_code, restore_code, len(image_addrs)
+
 
 def generate_save_restore_stack(mask_data):
     """Generate save/restore code that uses both memory access and stack"""
@@ -560,6 +592,7 @@ def generate_save_restore_stack(mask_data):
 
     return save_code, restore_code, save_size
 
+
 def generate_restore_copy(mask_data, *, low=False):
     """Generate restore by copying from screen in other 32K"""
     image_addrs, next_dir = [], []
@@ -574,7 +607,7 @@ def generate_restore_copy(mask_data, *, low=False):
                     addr = y * 128 + x
                     image_addrs.append(addr)
                     if len(image_addrs) > 1:
-                        next_dir.append(-1 if (image_addrs[-1]&0x7f) < (image_addrs[-2]&0x7f) else 1)
+                        next_dir.append(-1 if (image_addrs[-1] & 0x7f) < (image_addrs[-2] & 0x7f) else 1)
             dx = -dx
     next_dir.append(next_dir[-1] if next_dir else 1)  # duplicate final direction, if any
 
@@ -584,7 +617,7 @@ def generate_restore_copy(mask_data, *, low=False):
     restore_code = []
     sync_de_code = ['ld d,h', 'ld e,l', 'res 7,d' if low else 'set 7,d',]
 
-    for addr,dir in zip(image_addrs, next_dir):
+    for addr, dir in zip(image_addrs, next_dir):
         restore_code += reg16_change(last_dst, addr, reg='hl', spare_pair='bc')[0]
 
         if last_src is None:
@@ -601,6 +634,7 @@ def generate_restore_copy(mask_data, *, low=False):
 
     return restore_code
 
+
 def generate_clear_push(mask_data):
     """Generate display clear code that (mostly) uses the stack"""
     line_ends = []
@@ -610,7 +644,7 @@ def generate_clear_push(mask_data):
     for p in range(2):
         for y in range(0, height, 2) if p == 0 else reversed(range(1, height, 2)):
             start = next((i for i, m in enumerate(mask_data[y]) if m), None)
-            if start != None:
+            if start is not None:
                 end = next((i for i, m in reversed(list(enumerate(mask_data[y]))) if m)) + 1
                 end_addr = y * 128 + end
 
@@ -631,6 +665,7 @@ def generate_clear_push(mask_data):
 
     code += ['@sp_restore:', 'ld sp,0', 'ret']
     return code
+
 
 def generate_clear_rect_push(width_bytes, height):
     """Generate rect clearing code for the given size"""
@@ -661,6 +696,7 @@ def generate_clear_rect_push(width_bytes, height):
 ###############################################################################
 # Tile Converters
 
+
 def tile_to_code(args, img_tile, idx_tile):
     """Generate code routines for the given tile image"""
     if args.mode != 4:
@@ -685,7 +721,7 @@ def tile_to_code(args, img_tile, idx_tile):
     image_data1, mask_data1 = [group_split(x, width_bytes) for x in image_data_bytes(img1.getdata())]
 
     if args.share:
-        mask_data_share = [list(map(operator.or_, a, b)) for a,b in zip(mask_data0, mask_data1)] if shifted else mask_data0
+        mask_data_share = [list(map(operator.or_, a, b)) for a, b in zip(mask_data0, mask_data1)] if shifted else mask_data0
         mask_data0 = mask_data1 = mask_data_share
 
     masked_code0 = generate_draw_poke(image_data0, mask_data0)
@@ -760,6 +796,7 @@ def tile_to_code(args, img_tile, idx_tile):
 
     return format_code(code)
 
+
 def tile_to_data(args, img_tile):
     """Convert colour indices to display and mask byte data"""
     bits_per_pixel = bpp_from_mode(args.mode)
@@ -773,6 +810,7 @@ def tile_to_data(args, img_tile):
     img_sprite.paste(img_tile, (pad_left, 0))
 
     return image_data_bytes(img_sprite.getdata(), bits_per_pixel)[0]
+
 
 def main(args):
     """Main Program"""
@@ -860,7 +898,7 @@ def main(args):
             f.write(bytearray(gfx_data))
         if not args.quiet:
             print(f"{num_tiles} tile(s) of size {tile_width}x{tile_height} "
-                f"for mode {args.mode} = {len(gfx_data)} bytes")
+                  f"for mode {args.mode} = {len(gfx_data)} bytes")
             print(f"Data written to {filename}")
 
     if code_text:
@@ -884,6 +922,7 @@ def main(args):
 
     if not args.quiet:
         print(f"{len(clut)} colours: {clut}")
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
