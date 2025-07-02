@@ -901,17 +901,6 @@ def main(args):
                   f"for mode {args.mode} = {len(gfx_data)} bytes")
             print(f"Data written to {filename}")
 
-    if code_text:
-        filename = args.output or f"{basename}.asm"
-        if filename == "-":
-            print(code_text)
-        else:
-            with open(filename, 'a+' if args.append else 'w') as f:
-                f.write("; tile2sam.py generated code\n")
-                f.write(code_text)
-            if args.verbose:
-                print(f"Code {'appended' if args.append else 'written'} to {filename}")
-
     if args.pal:
         with open(f"{basename}.pal", 'wb') as f:
             f.write(bytearray(clut))
@@ -922,6 +911,17 @@ def main(args):
 
     if args.verbose:
         print(f"{len(clut)} colours: {clut}")
+
+    if code_text:
+        filename = args.output or f"{basename}.asm"
+        if filename == "-":
+            print(code_text)
+        else:
+            with open(filename, 'a+' if args.append else 'w') as f:
+                f.write("; tile2sam.py generated code\n")
+                f.write(code_text)
+            if args.verbose:
+                print(f"Code {'appended' if args.append else 'written'} to {filename}")
 
 
 if __name__ == "__main__":
