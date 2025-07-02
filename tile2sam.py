@@ -825,17 +825,17 @@ def main(args):
     except IOError as err:
         sys.exit(err)
 
-    if not args.quiet:
+    if args.verbose:
         print(f"Source image {args.image} is {img.size[0]}x{img.size[1]}")
 
     if args.crop:
         img = crop_image(img, args.crop)
-        if not args.quiet:
+        if args.verbose:
             print(f"Cropped image to {img.size[0]}x{img.size[1]}")
 
     if args.scale:
         img = scale_image(img, args.scale)
-        if not args.quiet:
+        if args.verbose:
             print(f"Scaled image to {img.size[0]}x{img.size[1]}")
 
     tiles_x = img.width // tile_width
@@ -845,7 +845,7 @@ def main(args):
 
     if not tiles_x or not tiles_y:
         sys.exit(f"error: source image too small for {tile_width}x{tile_height} tiles")
-    elif not args.quiet:
+    elif args.verbose:
         print(f"Contains {tiles_x}x{tiles_y} grid of {tile_width}x{tile_height} tiles")
 
     sam_palette = generate_sam_palette()
@@ -896,7 +896,7 @@ def main(args):
         filename = args.output or f"{basename}.bin"
         with open(filename, 'ab+' if args.append else 'wb') as f:
             f.write(bytearray(gfx_data))
-        if not args.quiet:
+        if args.verbose:
             print(f"{num_tiles} tile(s) of size {tile_width}x{tile_height} "
                   f"for mode {args.mode} = {len(gfx_data)} bytes")
             print(f"Data written to {filename}")
@@ -909,7 +909,7 @@ def main(args):
             with open(filename, 'a+' if args.append else 'w') as f:
                 f.write("; tile2sam.py generated code\n")
                 f.write(code_text)
-            if not args.quiet:
+            if args.verbose:
                 print(f"Code {'appended' if args.append else 'written'} to {filename}")
 
     if args.pal:
@@ -920,7 +920,7 @@ def main(args):
         with open(f"{basename}.idx", 'wb') as f:
             f.write(bytearray(struct.pack(f">{len(index_data)}H", *index_data)))
 
-    if not args.quiet:
+    if args.verbose:
         print(f"{len(clut)} colours: {clut}")
 
 
@@ -938,7 +938,8 @@ if __name__ == "__main__":
     parser.add_argument('-z', '--code', help="Z80 code to generate")
     parser.add_argument('-n', '--names', help="Names for sprite labels")
     parser.add_argument('-0', '--low', default=False, action='store_true', help="screen at 0 instead of 0x8000")
-    parser.add_argument('-q', '--quiet', default=False, action='store_true', help="quiet mode")
+    parser.add_argument('-q', '--quiet', action='store_true', help=argparse.SUPPRESS)  # unused legacy option
+    parser.add_argument('-v', '--verbose', default=False, action='store_true', help="verbose mode")
     parser.add_argument('--crop', help="crop region (WxH or WxH+X+Y)")
     parser.add_argument('--scale', help="scale region (S or HxV)")
     parser.add_argument('--shift', default=None, type=int, help="pixels to shift right")
