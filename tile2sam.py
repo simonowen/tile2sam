@@ -11,6 +11,9 @@ import argparse
 import operator
 from PIL import Image     # requires Pillow ("python -m pip install pillow")
 
+CLUT_SIZE = 16
+TRANSPARENT = CLUT_SIZE  # invalid clut index for transparent colour
+
 instr_timings = [
     # regex, bytes, tstates
     (r'ld\s+\w,\(hl\)', 1, 8),                          # ld r,(hl)
@@ -64,39 +67,25 @@ def generate_sam_palette():
     return palette
 
 
-def colour_distance_squared(colour1, colour2):
-    """Square of the Euclidian distance between two colours"""
-    dist_squared = sum((a - b) ** 2 for a, b in zip(colour1, colour2))
-    return dist_squared
-
-
-def closest_palette_index(colour, palette):
-    """Return the palette index that best matches the supplied RGB colour"""
-    dists_squared = {colour_distance_squared(colour, c): c for c in palette}
-    closest_index = dists_squared[min(dists_squared)]
-    idx = [i for i, c in enumerate(palette) if c == closest_index][0]
-    return idx
-
-
-def palettise_image(img, palette):
+def palettise_image(img, palette, bkg_col=None):
     """Map image to nearest colours in a given palette"""
-    img_palette = img.getcolors()
-    if img_palette is None:
-        sys.exit("error: source image has too many colours!")
-    col_map = {x[1]: closest_palette_index(x[1], palette) for x in img_palette}
+    img_palette = Image.new('P', img.size)
+    img_palette.putpalette([c for tup in palette for c in tup])
 
-    img_pal = Image.new('P', img.size)
-    img_pal.putpalette([c for tup in palette for c in tup])
+    img_rgba = img.convert("RGBA")
+    img_pal = img_rgba.convert("RGB").quantize(palette=img_palette, dither=Image.NONE)
+    rgba_pixels = img_rgba.load()
     pal_pixels = img_pal.load()
-    pixels = img.load()
 
-    # PIL Image.quantize always dithers, so convert manually.
-    width, height = img.size
-    for x in range(width):
-        for y in range(height):
-            pal_pixels[x, y] = col_map[pixels[x, y]]
+    col_map = {}
+    for y in range(img.height):
+        for x in range(img.width):
+            col_map[pal_pixels[x, y]] = rgba_pixels[x, y]
 
-    return img_pal
+    transp_cols = sorted([i for i, c in col_map.items() if c[3] == 0])  # zero alpha
+    bkg_cols = [bkg_col] if bkg_col is not None else transp_cols or [0]
+
+    return bkg_cols, img_pal
 
 
 def read_palette(pal):
@@ -111,16 +100,15 @@ def read_palette(pal):
             sys.exit("error: invalid colour list")
 
 
-def clut_index(colour, clut):
+def clut_index(colour, clut, bkg_cols=[]):
     """Return the (first) CLUT index corresponding to the supplied colour"""
-    matches = [i for i, c in enumerate(clut) if c == colour]
-    return matches[0]
+    return TRANSPARENT if (colour in bkg_cols or colour not in clut) else clut.index(colour)
 
 
-def clutise_image(img, clut):
+def clutise_image(img, clut, bkg_cols=[]):
     """Map palette colour indicies to colour look-up table indices"""
-    col_map = {x[1]: clut_index(x[1], clut) for x in img.getcolors()}
-    return img.point(lambda i: col_map.get(i, 0))
+    col_map = {x[1]: clut_index(x[1], clut, bkg_cols) for x in img.getcolors()}
+    return img.point(lambda i: col_map.get(i, TRANSPARENT))
 
 
 def crop_image(img, geometry):
@@ -184,11 +172,11 @@ def group_split(items, group_size):
 def image_data_bytes(img_data, bpp=4):
     """Convert CLUT entries to SAM display byte rows"""
     byte_groups = group_split(img_data, 8 // bpp)
-    data_bytes = [sum([n << (bpp * i)
+    data_bytes = [sum([(n if (n != TRANSPARENT) else 0) << (bpp * i)
                       for i, n in enumerate(reversed(t))]) for t in byte_groups]
 
     mask_value = (1 << bpp) - 1
-    mask_bytes = [sum([(mask_value if n else 0) << (bpp * i)
+    mask_bytes = [sum([(mask_value if (n != TRANSPARENT) else 0) << (bpp * i)
                       for i, n in enumerate(reversed(t))]) for t in byte_groups]
 
     return data_bytes, mask_bytes
@@ -712,8 +700,8 @@ def tile_to_code(args, img_tile, idx_tile):
     width_bytes = width_bytes1
     height = img_tile.height
 
-    img0 = Image.new(img_tile.mode, (width_bytes * 2, height))
-    img1 = Image.new(img_tile.mode, (width_bytes * 2, height))
+    img0 = Image.new(img_tile.mode, (width_bytes * 2, height), TRANSPARENT)
+    img1 = Image.new(img_tile.mode, (width_bytes * 2, height), TRANSPARENT)
     img0.paste(img_tile, (0, 0))
     img1.paste(img_tile, (1, 0))
 
@@ -806,7 +794,7 @@ def tile_to_data(args, img_tile):
     pad_right = (-(pad_left + img_tile.width) % pixels_per_byte)
 
     sprite_width = pad_left + img_tile.width + pad_right
-    img_sprite = Image.new(img_tile.mode, (sprite_width, img_tile.height))
+    img_sprite = Image.new(img_tile.mode, (sprite_width, img_tile.height), TRANSPARENT)
     img_sprite.paste(img_tile, (pad_left, 0))
 
     return image_data_bytes(img_sprite.getdata(), bits_per_pixel)[0]
@@ -815,14 +803,11 @@ def tile_to_data(args, img_tile):
 def main(args):
     """Main Program"""
 
-    if args.mode not in [1, 2, 3, 4]:
-        sys.exit(f"error: invalid screen mode ({args.mode}), must be 1-4")
-
     tile_width, tile_height = get_tile_size(args.tilesize)
 
     try:
-        img = Image.open(args.image).convert("RGB")
-    except IOError as err:
+        img = Image.open(args.image)
+    except BaseException as err:
         sys.exit(err)
 
     if args.verbose:
@@ -849,11 +834,13 @@ def main(args):
         print(f"Contains {tiles_x}x{tiles_y} grid of {tile_width}x{tile_height} tiles")
 
     sam_palette = generate_sam_palette()
-    img_pal = palettise_image(img, sam_palette)
+    bkg_cols, img_pal = palettise_image(img, sam_palette, args.bkgcol)
+    if args.verbose:
+        print(f"Background colours: {bkg_cols}")
 
     bits_per_pixel = bpp_from_mode(args.mode)
 
-    palette = sorted([c[1] for c in img_pal.getcolors()])
+    palette = sorted([c[1] for c in img_pal.getcolors() if c[1] == 0 or c[1] not in bkg_cols])
     if len(palette) > (1 << bits_per_pixel):
         print(palette)
         sys.exit(f"error: too many colours ({len(palette)}) for screen mode {args.mode}")
@@ -868,7 +855,7 @@ def main(args):
     if len(clut) > (1 << bits_per_pixel):
         sys.exit(f"error: clut has too many entries ({len(clut)}) for mode {args.mode}")
 
-    img_clut = clutise_image(img_pal, clut)
+    img_clut = clutise_image(img_pal, clut, bkg_cols)
 
     gfx_data, index_data = [], []
     code_text = ''
@@ -910,7 +897,7 @@ def main(args):
             f.write(bytearray(struct.pack(f">{len(index_data)}H", *index_data)))
 
     if args.verbose:
-        print(f"{len(clut)} colours: {clut}")
+        print(f"CLUT ({len(clut)} colours): {clut}")
 
     if code_text:
         filename = args.output or f"{basename}.asm"
@@ -934,6 +921,7 @@ if __name__ == "__main__":
     parser.add_argument('-a', '--append', default=False, action='store_true', help="append to existing output file")
     parser.add_argument('-p', '--pal', default=False, action='store_true', help="write clut to .pal file")
     parser.add_argument('-i', '--index', default=False, action='store_true', help="write offsets index to .idx")
+    parser.add_argument('-b', '--bkgcol', default=None, type=int, help="background colour (0-127)")
     parser.add_argument('-t', '--tiles', help="tile count or list of ranges (N-M)")
     parser.add_argument('-z', '--code', help="Z80 code to generate")
     parser.add_argument('-n', '--names', help="Names for sprite labels")
