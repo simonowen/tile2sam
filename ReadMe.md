@@ -4,13 +4,15 @@ Converts tiled SAM Coupé graphics images to Z80 code or a linear data.
 
 ## Prerequisites
 
-- Python 3.6 (or later) in your path [[Windows download](https://www.python.org/downloads/windows/)]
+- Python 3.6 (or later) in your path
 - Pillow module for Python
 
 If you have *Python* installed but not *Pillow*, you can install it using:
 ```
 python -m pip install pillow
 ```
+
+Windows users can install the latest Python version from the Microsoft Store.
 
 ## Command-line Options
 
@@ -35,17 +37,24 @@ optional arguments:
   -a, --append          append to existing output file (default: False)
   -p, --pal             write clut to .pal file (default: False)
   -i, --index           write offsets index to .idx (default: False)
+  -b BKGCOL, --bkgcol BKGCOL
+                        background colour (0-127) (default: None)
   -t TILES, --tiles TILES
                         tile count or list of ranges (N-M) (default: None)
   -z CODE, --code CODE  Z80 code to generate (default: None)
   -n NAMES, --names NAMES
                         Names for sprite labels (default: None)
   -0, --low             screen at 0 instead of 0x8000 (default: False)
-  -q, --quiet           quiet mode (default: False)
+  -v, --verbose         verbose mode (default: False)
   --crop CROP           crop region (WxH or WxH+X+Y) (default: None)
   --scale SCALE         scale region (S or HxV) (default: None)
   --shift SHIFT         pixels to shift right (default: None)
+  --share               share even/odd save/restore code (default: False)
+  --timings             show nominal code timings (default: False)
   ```
+
+The `-q, --quiet` option in earlier versions is now the default behaviour. Use
+the new `-v, --verbose` options to display conversion details.
 
 ## Required Arguments
 
@@ -76,9 +85,9 @@ Specifies the dimensions of the tiles to extract, in pixels. If a single value
 specified they should be in the format `WxH`.
 
 If the tile width does not result in an exact number of output bytes, the right
-edge is padded with zero pixels. To be aligned to byte boundaries, mode 4 tile
-width should be a multiple of 2, mode 3 a multiple of 4, and modes 1 and 2 a
-multiple of 8.
+edge is padded with background pixels. To be aligned to byte boundaries, mode 4
+tile width should be a multiple of 2, mode 3 a multiple of 4, and modes 1 and 2
+a multiple of 8.
 
 ## Optional Arguments
 
@@ -91,14 +100,15 @@ instead of binary graphics data. The available routines are:
 - `unmasked` - draw to display _without_ masking partial bytes [label: unmasked_*name*]
 - `save` - save display area affected by drawn sprite [label: save_*name*]
 - `restore` - restore previously saved area [label: restore_*name*]
+- `copy` - remove drawn sprite by copying from alternate screen [label: copy_*name*]
 - `clear` - clear display area affected by drawn sprite [label: clear_*name*]
 - `rect` - clear routine for rectangle covering the sprite area [label: clear_rect_*WB*x*H*]
 
 ### Notes
 
-- Specifying `save` or `restore` generates both routines, since each is useless
-  without the other.
+- Specifying `save` or `restore` generates both routines.
 - A save_*name*_size symbol is defined to hold the save buffer size in bytes.
+- 'copy' expects a screen source in the opposite 32K from the drawn display.
 - `rect` generates a label name using the width (in bytes) and height of the
   sprite. To avoid duplicate labels and code this should generally be given as
   the only routine, once per sprite size.
@@ -135,7 +145,9 @@ automatically assigned to later positions. The final CLUT size must be within
 the limit for the screen mode (sixteen colours for mode 4, four colours for mode
 3, and two colours for modes 1 and 2).
 
-The default behaviour generates a palette from the colours found in the image.
+If no CLUT is provided and the image colours are a subset of the BASIC mode 4
+colours, they will be used instead. Otherwise a CLUT will be generated from the
+colours in the source image.
 
 > `-o OUTPUT, --output OUTPUT`
 
@@ -145,6 +157,8 @@ output and `.asm` for code output. The same basename is also used for `.pal` and
 
 The default behaviour uses the basename of the input image, so `image.png` will
 generate `image.dat`.
+
+With code generation, using an output file of `-` will write the code to stdout.
 
 > `-p, --pal`
 
@@ -164,6 +178,16 @@ to give a more useful look-up table.
 
 The default behaviour is not to output an index.
 
+> `-b, --bkgcol`
+
+Specifies a SAM palette colour to treat as the background of the source image.
+The background colour is treated as transparent, and is not added to the CLUT
+colours. All other colours are treated as opaque foreground colours.
+
+If no background colour is specified but the source image contains a palette
+with alpha transparecy, any colours with zero alpha are treated as background.
+Otherwise palette colour 0 (black) is treated as transparent.
+
 > `-t TILES, --tiles TILES`
 
 Selects the tiles to extract from the image. If a single value is given it's
@@ -179,10 +203,10 @@ possible.
 
 Append to any existing output file, rather than creating a new file.
 
-> `-q, --quiet`
+> `-v, --verbose`
 
-Suppress the output statistics shown at the end of the extraction. Error
-messages are always shown.
+Show details about processing, which are hidden by default. Error messages are
+always shown.
 
 > `--crop CROP`
 
@@ -213,6 +237,22 @@ drawing routines. The default behaviour is not to shift content.
 
 Using `--shift 0` with code generation will suppress the code for odd x
 positions. The default behaviour generates code for both even and odd positions.
+
+> `--share`
+
+Used by code generation, causing the code generated by save/restore to cover
+both even and odd shift positions. This reduces the amount of code generated
+with only a small increase in execution time.
+
+Note: If your sprite use a full even width the shifted odd position will spill
+into a new display byte. Restoring a drawn sprite at the extreme right edge of
+the display may overflow into the next screen row, or a byte beyond the end of
+the display file. Use with care!
+
+> `--timings`
+
+Shows the nominal code timings in t-states for each type of code generation
+routine, to help compare different methods.
 
 ## Examples
 
@@ -270,25 +310,30 @@ Extract a mode 2 screen from a 576x480 SimCoupe screenshot to `mode2.bin`:
 tile2sam.py --crop 512x384+32+48 --scale 0.5x0.5 --mode 2 mode2.png 256x192
 ```
 
-Generate code to draw masked 12x11 sprites from a mode 4 image:
+Generate code to draw masked 11x11 sprites from a mode 4 image:
 ```
-tile2sam.py --code masked,save --names cherry,strawb,orange --pal sprites.png 12x11
-```
-
-Generate and append code to draw unmasked 12x11 tiles from a mode 4 image:
-```
-tile2sam.py -a --code unmasked,clear --names cherry,strawb,orange --pal sprites.png 12x11
+tile2sam.py --code masked,save --names cherry,strawb,orange --pal sprites.png 11x11
 ```
 
-Generate code to draw a masked 12x11 sprite only at even x positions:
+Generate and append code to draw unmasked 11x11 tiles from a mode 4 image:
 ```
-tile2sam.py --code masked,save --names ghost --shift 0 --pal ghost.png 12x11
+tile2sam.py -a --code unmasked,clear --names cherry,strawb,orange --pal sprites.png 11
 ```
+
+Generate code to draw a masked 11x11 sprite only at even x positions:
+```
+tile2sam.py --code masked,save --names ghost --shift 0 --pal ghost.png 11x11
+```
+
+Generate code to draw a masked 11x11 sprite, restoring from clean screen copy:
+```
+tile2sam.py --code masked,copy --names ghost --pal ghost.png 11x11
+```
+
+The demo directories contain examples using code generation and sprite drawing.
 
 The `test` directory in the source code contains additional data extraction
-examples, including code to load and display the 3 screenshot samples. The
-`demo1`, `demo2` and `demo3` directories contain examples using code generation
-and sprite drawing.
+examples, including code to load and display the 3 screenshot samples.
 
 ## License
 
