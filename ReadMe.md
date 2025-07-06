@@ -1,28 +1,37 @@
 # tile2sam
 
-Converts tiled SAM Coupé graphics images to Z80 code or a linear data.
+A Python script to convert SAM Coupé graphics images to Z80 code or data.
 
-## Prerequisites
+Generated code is sprite-specific and highly optimised. Or provide your own
+drawing routines for the extracted graphics data.
 
-- Python 3.6 (or later) in your path
-- Pillow module for Python
+## Requirements
 
-If you have *Python* installed but not *Pillow*, you can install it using:
-```
-python -m pip install pillow
-```
+- Python 3.8 (or later)
 
 Windows users can install the latest Python version from the Microsoft Store.
+
+## Installation
+
+To install:
+```
+python3 -m pip install tile2sam
+```
+
+To upgrade to the latest version:
+```
+python3 -m pip install --upgrade tile2sam
+```
 
 ## Command-line Options
 
 ```
-usage: tile2sam.py [-h] [-m MODE] [-c CLUT] [-o OUTPUT] [-a] [-p] [-i]
+usage: tile2sam [-h] [-m MODE] [-c CLUT] [-o OUTPUT] [-a] [-p] [-i]
                    [-t TILES] [-z CODE] [-n NAMES] [-0] [-q] [--crop CROP]
                    [--scale SCALE] [--shift SHIFT]
                    image tilesize
 
-Convert SAM graphics images to code or data files.
+Convert SAM Coupé graphics to Z80 code or data.
 
 positional arguments:
   image
@@ -46,6 +55,7 @@ optional arguments:
                         Names for sprite labels (default: None)
   -0, --low             screen at 0 instead of 0x8000 (default: False)
   -v, --verbose         verbose mode (default: False)
+  --version             show program's version number and exit
   --crop CROP           crop region (WxH or WxH+X+Y) (default: None)
   --scale SCALE         scale region (S or HxV) (default: None)
   --shift SHIFT         pixels to shift right (default: None)
@@ -258,82 +268,77 @@ routine, to help compare different methods.
 
 Extract all 16x16 tiles from `sprites.png`, write the graphics data to
 `sprites.bin` and palette to `sprites.pal`:
-
 ```
-tile2sam.py --pal sprites.png 16x16
+tile2sam --pal sprites.png 16x16
 ```
 
 Extract the first 100 6x6 tiles from `tiles.png`, using the colours from
 `sprites.pal`:
-
 ```
-tile2sam.py --clut sprites.pal --tiles 100 tiles.png 6x6
+tile2sam --clut sprites.pal --tiles 100 tiles.png 6x6
 ```
 
 Extract a non-contiguous selection of 6x6 tiles from `tiles.png`:
-
 ```
-tile2sam.py --tiles 10-19,99-90,42 tiles.png 6
+tile2sam --tiles 10-19,99-90,42 tiles.png 6
 ```
 
 Extract a 6x8 1-bit font from `font.png`, write the data to `font.bin`:
 ```
-tile2sam.py --mode 2 font.png 6x8
+tile2sam --mode 2 font.png 6x8
 ```
 
 Extract a 6x8 1-bit font from `font.png`, shifting the data 2 positions to
 right-align it, then write to `font_centre.bin`:
 ```
-tile2sam.py --mode 2 --shift 2 -o font_centre.bin font.png 6x8
+tile2sam --mode 2 --shift 2 -o font_centre.bin font.png 6x8
 ```
 
 Extract all 12x12 sprites from `sprites.png`, fixing only the first 4 CLUT
 colours so the rest are automatically assigned:
 ```
-tile2sam.py --clut 0,127,25,126 sprites.png 12
+tile2sam --clut 0,127,25,126 sprites.png 12
 ```
 
 Extract a mode 4 screen from a 576x480 SimCoupe screenshot to `mode4.bin` and
 `mode4.pal`:
 ```
-tile2sam.py --crop 512x384+32+48 --scale 0.5 --pal mode4.png 256x192
+tile2sam --crop 512x384+32+48 --scale 0.5 --pal mode4.png 256x192
 ```
 
 Extract a mode 3 screen from a 576x480 SimCoupe screenshot to `mode3.bin` and
 `mode3.pal`:
 ```
-tile2sam.py --crop 512x384+32+48 --scale 1.0x0.5 --mode 3 --pal mode3.png 512x192
+tile2sam --crop 512x384+32+48 --scale 1.0x0.5 --mode 3 --pal mode3.png 512x192
 ```
 
 Extract a mode 2 screen from a 576x480 SimCoupe screenshot to `mode2.bin`:
 ```
-tile2sam.py --crop 512x384+32+48 --scale 0.5x0.5 --mode 2 mode2.png 256x192
+tile2sam --crop 512x384+32+48 --scale 0.5x0.5 --mode 2 mode2.png 256x192
 ```
 
 Generate code to draw masked 11x11 sprites from a mode 4 image:
 ```
-tile2sam.py --code masked,save --names cherry,strawb,orange --pal sprites.png 11x11
+tile2sam --code masked,save --names cherry,strawb,orange --pal sprites.png 11x11
 ```
 
 Generate and append code to draw unmasked 11x11 tiles from a mode 4 image:
 ```
-tile2sam.py -a --code unmasked,clear --names cherry,strawb,orange --pal sprites.png 11
+tile2sam -a --code unmasked,clear --names cherry,strawb,orange --pal sprites.png 11
 ```
 
 Generate code to draw a masked 11x11 sprite only at even x positions:
 ```
-tile2sam.py --code masked,save --names ghost --shift 0 --pal ghost.png 11x11
+tile2sam --code masked,save --names ghost --shift 0 --pal ghost.png 11x11
 ```
 
 Generate code to draw a masked 11x11 sprite, restoring from clean screen copy:
 ```
-tile2sam.py --code masked,copy --names ghost --pal ghost.png 11x11
+tile2sam --code masked,copy --names ghost --pal ghost.png 11x11
 ```
 
-The demo directories contain examples using code generation and sprite drawing.
-
-The `test` directory in the source code contains additional data extraction
-examples, including code to load and display the 3 screenshot samples.
+Full example programs are available from the tile2sam [GitHub
+repository](https://github.com/simonowen/tile2sam), under the demos directory.
 
 ## License
 

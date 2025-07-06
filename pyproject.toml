@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=77.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tile2sam"
+version = "1.2.0"
+description = "Convert SAM Coupé graphics to Z80 code or data"
+readme = { file = "ReadMe.md", content-type = "text/markdown" }
+authors = [
+    { name = "Simon Owen", email = "simon@simonowen.com" }
+]
+license = "MIT"
+keywords = ["sam", "coupe", "tile", "graphics"]
+urls = { "Homepage" = "https://github.com/simonowen/tile2sam" }
+dependencies = ["pillow>=8.0.0"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Programming Language :: Python :: 3.8",
+    "Topic :: Multimedia :: Graphics :: Graphics Conversion",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Utilities",
+    "Environment :: Console"
+]
+
+[project.scripts]
+tile2sam = "tile2sam.tile2sam:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]

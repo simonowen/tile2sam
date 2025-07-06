@@ -1,11 +1,11 @@
 @echo off
 
 setlocal
-set NAME=demo4
+set NAME=demo2
 
 if "%1"=="clean" goto clean
 
-..\tile2sam.py sprites.png 11x11 --code unmasked,clear --names cherry,strawb,orange,bell,apple,grapes,galax,key --pal %*
+tile2sam sprites.png 11x11 --code masked,save,restore --names cherry,strawb,orange,bell,apple,grapes,galax,key --pal --bkgcol=60 %*
 if errorlevel 1 goto end
 pyz80.py -I samdos2 --mapfile=%NAME%.map %NAME%.asm
 if errorlevel 1 goto end

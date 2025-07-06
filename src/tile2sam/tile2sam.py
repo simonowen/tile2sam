@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 #
 # https://github.com/simonowen/tile2sam
-"""Extracts tiled SAM graphics data from an image file"""
+"""Convert SAM Coupé graphics images to Z80 code or data"""
 
 import os
 import re
@@ -9,6 +9,7 @@ import sys
 import struct
 import argparse
 import operator
+from importlib.metadata import version, PackageNotFoundError
 from PIL import Image     # requires Pillow ("python -m pip install pillow")
 
 CLUT_SIZE = 16
@@ -800,8 +801,39 @@ def tile_to_data(args, img_tile):
     return image_data_bytes(img_sprite.getdata(), bits_per_pixel)[0]
 
 
-def main(args):
+def main():
     """Main Program"""
+
+    try:
+        pkg_version = version('tile2sam')
+    except PackageNotFoundError:
+        pkg_version = 'unknown'
+
+    parser = argparse.ArgumentParser(
+        description="Convert SAM Coupé graphics images to Z80 code or data.",
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
+    parser.add_argument('-m', '--mode', default=4, type=int, help="output data screen mode (1-4)")
+    parser.add_argument('-c', '--clut', help="custom colour file or list")
+    parser.add_argument('-o', '--output', help="custom output filename")
+    parser.add_argument('-a', '--append', default=False, action='store_true', help="append to existing output file")
+    parser.add_argument('-p', '--pal', default=False, action='store_true', help="write clut to .pal file")
+    parser.add_argument('-i', '--index', default=False, action='store_true', help="write offsets index to .idx")
+    parser.add_argument('-b', '--bkgcol', default=None, type=int, help="background colour (0-127)")
+    parser.add_argument('-t', '--tiles', help="tile count or list of ranges (N-M)")
+    parser.add_argument('-z', '--code', help="Z80 code to generate")
+    parser.add_argument('-n', '--names', help="Names for sprite labels")
+    parser.add_argument('-0', '--low', default=False, action='store_true', help="screen at 0 instead of 0x8000")
+    parser.add_argument('-q', '--quiet', action='store_true', help=argparse.SUPPRESS)  # unused legacy option
+    parser.add_argument('-v', '--verbose', default=False, action='store_true', help="verbose mode")
+    parser.add_argument('--version', action='version', version=pkg_version)
+    parser.add_argument('--crop', help="crop region (WxH or WxH+X+Y)")
+    parser.add_argument('--scale', help="scale region (S or HxV)")
+    parser.add_argument('--shift', default=None, type=int, help="pixels to shift right")
+    parser.add_argument('--share', default=False, action='store_true', help="share even/odd save/restore code")
+    parser.add_argument('--timings', default=False, action='store_true', help="show nominal code timings")
+    parser.add_argument('image')
+    parser.add_argument('tilesize')
+    args = parser.parse_args()
 
     tile_width, tile_height = get_tile_size(args.tilesize)
 
@@ -905,34 +937,11 @@ def main(args):
             print(code_text)
         else:
             with open(filename, 'a+' if args.append else 'w') as f:
-                f.write("; tile2sam.py generated code\n")
+                f.write("; tile2sam generated code\n")
                 f.write(code_text)
             if args.verbose:
                 print(f"Code {'appended' if args.append else 'written'} to {filename}")
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(
-        description="Convert SAM graphics images to code or data files.",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
-    parser.add_argument('-m', '--mode', default=4, type=int, help="output data screen mode (1-4)")
-    parser.add_argument('-c', '--clut', help="custom colour file or list")
-    parser.add_argument('-o', '--output', help="custom output filename")
-    parser.add_argument('-a', '--append', default=False, action='store_true', help="append to existing output file")
-    parser.add_argument('-p', '--pal', default=False, action='store_true', help="write clut to .pal file")
-    parser.add_argument('-i', '--index', default=False, action='store_true', help="write offsets index to .idx")
-    parser.add_argument('-b', '--bkgcol', default=None, type=int, help="background colour (0-127)")
-    parser.add_argument('-t', '--tiles', help="tile count or list of ranges (N-M)")
-    parser.add_argument('-z', '--code', help="Z80 code to generate")
-    parser.add_argument('-n', '--names', help="Names for sprite labels")
-    parser.add_argument('-0', '--low', default=False, action='store_true', help="screen at 0 instead of 0x8000")
-    parser.add_argument('-q', '--quiet', action='store_true', help=argparse.SUPPRESS)  # unused legacy option
-    parser.add_argument('-v', '--verbose', default=False, action='store_true', help="verbose mode")
-    parser.add_argument('--crop', help="crop region (WxH or WxH+X+Y)")
-    parser.add_argument('--scale', help="scale region (S or HxV)")
-    parser.add_argument('--shift', default=None, type=int, help="pixels to shift right")
-    parser.add_argument('--share', default=False, action='store_true', help="share even/odd save/restore code")
-    parser.add_argument('--timings', default=False, action='store_true', help="show nominal code timings")
-    parser.add_argument('image')
-    parser.add_argument('tilesize')
-    main(parser.parse_args())
+    main()

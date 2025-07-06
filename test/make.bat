@@ -2,17 +2,17 @@
 if "%1"=="clean" goto clean
 
 echo Extracting tiles
-..\tile2sam.py -q --mode 2 font.png 6x8
-..\tile2sam.py -q --mode 1 --shift 2 --index -o font_right.bin font.png 6x8
-..\tile2sam.py -q --clut 0,127,25,126 --pal --tiles 102 sprites.png 12x12
-..\tile2sam.py -q --pal --tiles 101-0 -o sprites_rev.bin sprites.png 12x12
-..\tile2sam.py -q --clut sprites.pal --shift 1 --tiles 102 -o sprites_shift.bin sprites.png 12x12
-..\tile2sam.py -q --mode 1 --tiles 76 sprites_mono.png 12
-..\tile2sam.py -q --clut sprites.pal --pal --tiles 0-240,241,242-251 tiles.png 6
-..\tile2sam.py -q --mode 1 --tiles 192 tiles_mono.png 6
-..\tile2sam.py -q --crop 512x384+32+48 --scale 0.5x0.5 --mode 2 mode2.png 256x192
-..\tile2sam.py -q --crop 512x384+32+48 --scale 1.0x0.5 --mode 3 --pal mode3.png 512x192
-..\tile2sam.py -q --crop 512x384+32+48 --scale 0.5 --pal mode4.png 256x192
+..\src\tile2sam\tile2sam.py --mode 2 font.png 6x8
+..\src\tile2sam\tile2sam.py --mode 1 --shift 2 --index -o font_right.bin font.png 6x8
+..\src\tile2sam\tile2sam.py --clut 0,127,25,126 --pal --tiles 102 sprites.png 12x12
+..\src\tile2sam\tile2sam.py --pal --tiles 101-0 -o sprites_rev.bin sprites.png 12x12
+..\src\tile2sam\tile2sam.py --clut sprites.pal --shift 1 --tiles 102 -o sprites_shift.bin sprites.png 12x12
+..\src\tile2sam\tile2sam.py --mode 1 --tiles 76 sprites_mono.png 12
+..\src\tile2sam\tile2sam.py --clut sprites.pal --pal --tiles 0-240,241,242-251 tiles.png 6
+..\src\tile2sam\tile2sam.py --mode 1 --tiles 192 tiles_mono.png 6
+..\src\tile2sam\tile2sam.py --crop 512x384+32+48 --scale 0.5x0.5 --mode 2 mode2.png 256x192
+..\src\tile2sam\tile2sam.py --crop 512x384+32+48 --scale 1.0x0.5 --mode 3 --pal mode3.png 512x192
+..\src\tile2sam\tile2sam.py --crop 512x384+32+48 --scale 0.5 --pal mode4.png 256x192
 pyz80.py mode2.asm >nul
 pyz80.py mode3.asm >nul
 pyz80.py mode4.asm >nul
