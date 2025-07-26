@@ -80,7 +80,7 @@ dithering. Images with too many source colours may be rejected. Typically you'll
 want to author graphics directly using the original SAM palette colours:
 
 <p align="center">
-  <img src="images/sampalette.png" alt="SAM palette" />
+  <img src="https://raw.githubusercontent.com/simonowen/tile2sam/refs/heads/main/sampalette.png" alt="SAM palette" />
 </p>
 
 Tiles are extracted starting from the top-left of the image. Use the `--crop`
