@@ -3,7 +3,7 @@
 NAME=demo1
 
 ${NAME}.dsk:    ${NAME}.asm sprite.asm
-	@pyz80.py -I samdos2 --mapfile=${NAME}.map ${NAME}.asm
+	@pyz80 -I samdos2 --mapfile=${NAME}.map ${NAME}.asm
 
 sprite.asm:	sprite.png
 	tile2sam -v sprite.png 11x11 --code masked,save,restore --names ghost --pal --low

@@ -7,7 +7,7 @@ if "%1"=="clean" goto clean
 
 tile2sam sprites.png 11x11 --code unmasked,clear --names cherry,strawb,orange,bell,apple,grapes,galax,key --pal %*
 if errorlevel 1 goto end
-pyz80.py -I samdos2 --mapfile=%NAME%.map %NAME%.asm
+pyz80 -I samdos2 --mapfile=%NAME%.map %NAME%.asm
 if errorlevel 1 goto end
 
 goto end
