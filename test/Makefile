@@ -65,13 +65,13 @@ mode4.bin:	mode4.png
 
 
 mode2.dsk:	mode2.bin
-	@pyz80.py mode2.asm >/dev/null
+	@pyz80 mode2.asm >/dev/null
 
 mode3.dsk:	mode3.bin
-	@pyz80.py mode3.asm >/dev/null
+	@pyz80 mode3.asm >/dev/null
 
 mode4.dsk:	mode4.bin
-	@pyz80.py mode4.asm >/dev/null
+	@pyz80 mode4.asm >/dev/null
 
 
 clean:

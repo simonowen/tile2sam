@@ -13,9 +13,9 @@ echo Extracting tiles
 ..\src\tile2sam\tile2sam.py --crop 512x384+32+48 --scale 0.5x0.5 --mode 2 mode2.png 256x192
 ..\src\tile2sam\tile2sam.py --crop 512x384+32+48 --scale 1.0x0.5 --mode 3 --pal mode3.png 512x192
 ..\src\tile2sam\tile2sam.py --crop 512x384+32+48 --scale 0.5 --pal mode4.png 256x192
-pyz80.py mode2.asm >nul
-pyz80.py mode3.asm >nul
-pyz80.py mode4.asm >nul
+pyz80 mode2.asm >nul
+pyz80 mode3.asm >nul
+pyz80 mode4.asm >nul
 
 echo Comparing results
 fc /b font.bin golden\font.bin >nul || echo MISMATCH: font.bin
