@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "tile2sam"
-version = "1.2.0"
+version = "1.3.0"
 description = "Convert SAM Coupé graphics to Z80 code or data"
 readme = "ReadMe.md"
 authors = [
