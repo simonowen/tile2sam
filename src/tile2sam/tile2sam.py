@@ -1,16 +1,17 @@
 #!/usr/bin/env python3
 #
 # https://github.com/simonowen/tile2sam
-"""Convert SAM Coupé graphics images to Z80 code or data"""
+"""Convert SAM Coupé graphics to Z80 code or data"""
 
-import os
-import re
-import sys
-import struct
 import argparse
 import operator
-from importlib.metadata import version, PackageNotFoundError
-from PIL import Image     # requires Pillow ("python -m pip install pillow")
+import os
+import re
+import struct
+import sys
+from importlib.metadata import PackageNotFoundError, version
+
+from PIL import Image
 
 CLUT_SIZE = 16
 TRANSPARENT = CLUT_SIZE  # invalid clut index for transparent colour
@@ -74,7 +75,7 @@ def palettise_image(img, palette, bkg_col=None):
     img_palette.putpalette([c for tup in palette for c in tup])
 
     img_rgba = img.convert("RGBA")
-    img_pal = img_rgba.convert("RGB").quantize(palette=img_palette, dither=Image.NONE)
+    img_pal = img_rgba.convert("RGB").quantize(palette=img_palette, dither=Image.Dither.NONE)
     rgba_pixels = img_rgba.load()
     pal_pixels = img_pal.load()
 
@@ -131,7 +132,7 @@ def scale_image(img, scale):
     """Scale image by given factor(s)"""
     try:
         factors = [float(x) for x in re.findall(r"[\d.]+", scale)] * 2
-        return img.resize([int(n * factors[i]) for i, n in enumerate(img.size)], Image.NEAREST)
+        return img.resize([int(n * factors[i]) for i, n in enumerate(img.size)], Image.Resampling.NEAREST)
     except (ValueError, IndexError):
         sys.exit("error: invalid scale factors")
 
@@ -151,8 +152,8 @@ def get_tile_selection(tile_select, max_tiles):
         return [(0, max_tiles - 1)]
 
     try:
-        if int(tile_select) > 0:
-            return [(0, min(int(tile_select, 0), max_tiles) - 1)]
+        n_tiles = int(tile_select, 0)
+        return [(0, max(0, min(n_tiles, max_tiles) - 1))] if n_tiles else []
     except ValueError:
         try:
             # Convert list of N and N-M selections to pairs of N-M ranges.
@@ -263,14 +264,13 @@ class ValueStream:
     def __init__(self, data, *, regs):
         self.data = data
         self.regs = regs
-        self.cache = {}
         self.index = 0
 
         self.values, self.changes = self.get_values(self.data)
 
     def next_value(self, code):
         if self.index in self.changes:
-            code += self.changes[self.index][1]
+            code += self.changes[self.index]
 
         val = self.values[self.index]
         self.index += 1
@@ -324,7 +324,7 @@ class ValueStream:
         cacheable = self.get_cacheable(data)
 
         for i, b in enumerate(data):
-            if data[i] not in cache:
+            if b not in cache:
                 scoped = [(val, first - i) for val, first, last in cacheable if i <= last]
                 pending = [x[0] for x in sorted(scoped, key=lambda kv: kv[1])][:len(self.regs)]
 
@@ -347,7 +347,7 @@ class ValueStream:
                         free = free.replace(r, '')
 
                     if code:
-                        changes[i] = (cache, code)
+                        changes[i] = code
 
             values.append(cache.get(b, f'&{b:02x}'))
 
@@ -810,6 +810,7 @@ def main():
         pkg_version = 'unknown'
 
     parser = argparse.ArgumentParser(
+        prog='tile2sam',
         description="Convert SAM Coupé graphics images to Z80 code or data.",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-m', '--mode', default=4, type=int, help="output data screen mode (1-4)")
@@ -820,7 +821,7 @@ def main():
     parser.add_argument('-i', '--index', default=False, action='store_true', help="write offsets index to .idx")
     parser.add_argument('-b', '--bkgcol', default=None, type=int, help="background colour (0-127)")
     parser.add_argument('-t', '--tiles', help="tile count or list of ranges (N-M)")
-    parser.add_argument('-z', '--code', help="Z80 code to generate")
+    parser.add_argument('-z', '--code', help="Z80 routines to generate")
     parser.add_argument('-n', '--names', help="Names for sprite labels")
     parser.add_argument('-0', '--low', default=False, action='store_true', help="screen at 0 instead of 0x8000")
     parser.add_argument('-q', '--quiet', action='store_true', help=argparse.SUPPRESS)  # unused legacy option
@@ -832,43 +833,29 @@ def main():
     parser.add_argument('--share', default=False, action='store_true', help="share even/odd save/restore code")
     parser.add_argument('--timings', default=False, action='store_true', help="show nominal code timings")
     parser.add_argument('image')
-    parser.add_argument('tilesize')
+    parser.add_argument('tilesize', default=None, type=str, nargs='?', help="tile size (WxH or W)")
     args = parser.parse_args()
-
-    tile_width, tile_height = get_tile_size(args.tilesize)
 
     try:
         img = Image.open(args.image)
     except BaseException as err:
-        sys.exit(err)
+        sys.exit(str(err))
 
     if args.verbose:
-        print(f"Source image {args.image} is {img.size[0]}x{img.size[1]}")
+        print(f"Source image: {args.image} ({img.size[0]}x{img.size[1]})")
 
     if args.crop:
         img = crop_image(img, args.crop)
         if args.verbose:
-            print(f"Cropped image to {img.size[0]}x{img.size[1]}")
+            print(f"Cropped to: {img.size[0]}x{img.size[1]}")
 
     if args.scale:
         img = scale_image(img, args.scale)
         if args.verbose:
-            print(f"Scaled image to {img.size[0]}x{img.size[1]}")
-
-    tiles_x = img.width // tile_width
-    tiles_y = img.height // tile_height
-    tile_select = get_tile_selection(args.tiles, tiles_x * tiles_y)
-    img.crop((0, 0, tiles_x * tile_width, tiles_y * tile_height))
-
-    if not tiles_x or not tiles_y:
-        sys.exit(f"error: source image too small for {tile_width}x{tile_height} tiles")
-    elif args.verbose:
-        print(f"Contains {tiles_x}x{tiles_y} grid of {tile_width}x{tile_height} tiles")
+            print(f"Scaled to: {img.size[0]}x{img.size[1]}")
 
     sam_palette = generate_sam_palette()
     bkg_cols, img_pal = palettise_image(img, sam_palette, args.bkgcol)
-    if args.verbose:
-        print(f"Background colours: {bkg_cols}")
 
     bits_per_pixel = bpp_from_mode(args.mode)
 
@@ -889,25 +876,42 @@ def main():
 
     img_clut = clutise_image(img_pal, clut, bkg_cols)
 
+    if args.verbose:
+        print(f"CLUT ({len(clut)} colours): {clut}")
+        print(f"Background colours: {bkg_cols}")
+
     gfx_data, index_data = [], []
     code_text = ''
     num_tiles = 0
 
-    for start, end in tile_select:
-        step = +1 if start <= end else -1
-        for idx_tile in range(start, end + step, step):
-            x = (idx_tile % tiles_x) * tile_width
-            y = (idx_tile // tiles_x) * tile_height
+    if args.tilesize is not None:
+        tile_width, tile_height = get_tile_size(args.tilesize)
 
-            img_tile = img_clut.crop((x, y, x + tile_width, y + tile_height))
+        tiles_x = img.width // tile_width
+        tiles_y = img.height // tile_height
+        tile_select = get_tile_selection(args.tiles, tiles_x * tiles_y)
+        img.crop((0, 0, tiles_x * tile_width, tiles_y * tile_height))
 
-            if args.code:
-                code_text += tile_to_code(args, img_tile, idx_tile)
-            else:
-                index_data.append(len(gfx_data))
-                gfx_data += tile_to_data(args, img_tile)
+        if not tiles_x or not tiles_y:
+            sys.exit(f"error: source image too small for {tile_width}x{tile_height} tiles")
+        elif args.verbose:
+            print(f"Contains {tiles_x}x{tiles_y} grid of {tile_width}x{tile_height} tiles")
 
-            num_tiles += 1
+        for start, end in tile_select:
+            step = +1 if start <= end else -1
+            for idx_tile in range(start, end + step, step):
+                x = (idx_tile % tiles_x) * tile_width
+                y = (idx_tile // tiles_x) * tile_height
+
+                img_tile = img_clut.crop((x, y, x + tile_width, y + tile_height))
+
+                if args.code:
+                    code_text += tile_to_code(args, img_tile, idx_tile)
+                else:
+                    index_data.append(len(gfx_data))
+                    gfx_data += tile_to_data(args, img_tile)
+
+                num_tiles += 1
 
     basename = os.path.splitext(args.output or args.image)[0]
 
@@ -927,9 +931,6 @@ def main():
     if args.index and index_data:
         with open(f"{basename}.idx", 'wb') as f:
             f.write(bytearray(struct.pack(f">{len(index_data)}H", *index_data)))
-
-    if args.verbose:
-        print(f"CLUT ({len(clut)} colours): {clut}")
 
     if code_text:
         filename = args.output or f"{basename}.asm"

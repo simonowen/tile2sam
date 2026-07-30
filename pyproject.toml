@@ -1,30 +1,49 @@
 [build-system]
-requires = ["setuptools>=77.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling"]
+build-backend = "hatchling.build"
 
 [project]
 name = "tile2sam"
 version = "1.2.0"
 description = "Convert SAM Coupé graphics to Z80 code or data"
-readme = { file = "ReadMe.md", content-type = "text/markdown" }
+readme = "ReadMe.md"
 authors = [
     { name = "Simon Owen", email = "simon@simonowen.com" }
 ]
 license = "MIT"
 keywords = ["sam", "coupe", "tile", "graphics"]
 urls = { "Homepage" = "https://github.com/simonowen/tile2sam" }
-dependencies = ["pillow>=8.0.0"]
+
 classifiers = [
     "Development Status :: 4 - Beta",
-    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Graphics :: Graphics Conversion",
     "Topic :: Software Development :: Code Generators",
     "Topic :: Utilities",
     "Environment :: Console"
 ]
+requires-python = ">=3.10"
+dependencies = [
+    "pillow>=8.0.0"
+]
+
+[dependency-groups]
+dev = [
+    "pyz80>=1.3.0",
+    "ty>=0.0.65",
+    "ruff>=0.13.2",
+]
 
 [project.scripts]
 tile2sam = "tile2sam.tile2sam:main"
 
-[tool.setuptools.packages.find]
-where = ["src"]
+[tool.ruff.lint]
+preview = true # opt into preview rules
+select = ["E", "F", "I"]  # E=pycodestyle, F=pyflakes, I=import sorting
+ignore = ["E501", "E226", "E265"] # relax some whitespace rules

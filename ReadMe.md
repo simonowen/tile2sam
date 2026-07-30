@@ -5,39 +5,37 @@ A Python script to convert SAM Coupé graphics images to Z80 code or data.
 Generated code is sprite-specific and highly optimised. Or provide your own
 drawing routines for the extracted graphics data.
 
-## Requirements
-
-- Python 3.8 (or later)
-
-Windows users can install the latest Python version from the Microsoft Store.
-
 ## Installation
 
-To install:
-```
-python3 -m pip install tile2sam
+Installing the tool doesn't require the source code or even Python, just uv.
+
+Install [uv](https://docs.astral.sh/uv/#installation) if not already installed.
+Windows users can do that using:
+
+```shell
+winget install --id=astral-sh.uv -e
 ```
 
-To upgrade to the latest version:
-```
-python3 -m pip install --upgrade tile2sam
+Then install the `tile2sam` command using:
+
+```shell
+uv tool install tile2sam
 ```
 
 ## Command-line Options
 
-```
-usage: tile2sam [-h] [-m MODE] [-c CLUT] [-o OUTPUT] [-a] [-p] [-i]
-                   [-t TILES] [-z CODE] [-n NAMES] [-0] [-q] [--crop CROP]
-                   [--scale SCALE] [--shift SHIFT]
-                   image tilesize
+```text
+usage: tile2sam [-h] [-m MODE] [-c CLUT] [-o OUTPUT] [-a] [-p] [-i] [-b BKGCOL] [-t TILES] [-z CODE] [-n NAMES] [-0]
+                [-v] [--version] [--crop CROP] [--scale SCALE] [--shift SHIFT] [--share] [--timings]
+                image [tilesize]
 
-Convert SAM Coupé graphics to Z80 code or data.
+Convert SAM Coupé graphics images to Z80 code or data.
 
 positional arguments:
   image
-  tilesize
+  tilesize              tile size (WxH or W) (default: None)
 
-optional arguments:
+options:
   -h, --help            show this help message and exit
   -m MODE, --mode MODE  output data screen mode (1-4) (default: 4)
   -c CLUT, --clut CLUT  custom colour file or list (default: None)
@@ -50,7 +48,7 @@ optional arguments:
                         background colour (0-127) (default: None)
   -t TILES, --tiles TILES
                         tile count or list of ranges (N-M) (default: None)
-  -z CODE, --code CODE  Z80 code to generate (default: None)
+  -z CODE, --code CODE  Z80 routines to generate (default: None)
   -n NAMES, --names NAMES
                         Names for sprite labels (default: None)
   -0, --low             screen at 0 instead of 0x8000 (default: False)
@@ -61,7 +59,7 @@ optional arguments:
   --shift SHIFT         pixels to shift right (default: None)
   --share               share even/odd save/restore code (default: False)
   --timings             show nominal code timings (default: False)
-  ```
+```
 
 The `-q, --quiet` option in earlier versions is now the default behaviour. Use
 the new `-v, --verbose` options to display conversion details.
@@ -79,9 +77,7 @@ Image colours are mapped to the nearest SAM palette colour, without any
 dithering. Images with too many source colours may be rejected. Typically you'll
 want to author graphics directly using the original SAM palette colours:
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/simonowen/tile2sam/refs/heads/main/sampalette.png" alt="SAM palette" />
-</p>
+![SAM palette](https://raw.githubusercontent.com/simonowen/tile2sam/refs/heads/main/sampalette.png)
 
 Tiles are extracted starting from the top-left of the image. Use the `--crop`
 and `--scale` options to limit the area of interest. Use `--tiles` to select the
@@ -107,7 +103,7 @@ Specifies a comma-separated list of Z80 routines to generate for each sprite,
 instead of binary graphics data. The available routines are:
 
 - `masked` - draw to display with partial byte masking [label: masked_*name*]
-- `unmasked` - draw to display _without_ masking partial bytes [label: unmasked_*name*]
+- `unmasked` - draw to display *without* masking partial bytes [label: unmasked_*name*]
 - `save` - save display area affected by drawn sprite [label: save_*name*]
 - `restore` - restore previously saved area [label: restore_*name*]
 - `copy` - remove drawn sprite by copying from alternate screen [label: copy_*name*]
@@ -268,72 +264,85 @@ routine, to help compare different methods.
 
 Extract all 16x16 tiles from `sprites.png`, write the graphics data to
 `sprites.bin` and palette to `sprites.pal`:
-```
+
+```shell
 tile2sam --pal sprites.png 16x16
 ```
 
 Extract the first 100 6x6 tiles from `tiles.png`, using the colours from
 `sprites.pal`:
-```
+
+```shell
 tile2sam --clut sprites.pal --tiles 100 tiles.png 6x6
 ```
 
 Extract a non-contiguous selection of 6x6 tiles from `tiles.png`:
-```
+
+```shell
 tile2sam --tiles 10-19,99-90,42 tiles.png 6
 ```
 
 Extract a 6x8 1-bit font from `font.png`, write the data to `font.bin`:
-```
+
+```shell
 tile2sam --mode 2 font.png 6x8
 ```
 
 Extract a 6x8 1-bit font from `font.png`, shifting the data 2 positions to
 right-align it, then write to `font_centre.bin`:
-```
+
+```shell
 tile2sam --mode 2 --shift 2 -o font_centre.bin font.png 6x8
 ```
 
 Extract all 12x12 sprites from `sprites.png`, fixing only the first 4 CLUT
 colours so the rest are automatically assigned:
-```
+
+```shell
 tile2sam --clut 0,127,25,126 sprites.png 12
 ```
 
 Extract a mode 4 screen from a 576x480 SimCoupe screenshot to `mode4.bin` and
 `mode4.pal`:
-```
+
+```shell
 tile2sam --crop 512x384+32+48 --scale 0.5 --pal mode4.png 256x192
 ```
 
 Extract a mode 3 screen from a 576x480 SimCoupe screenshot to `mode3.bin` and
 `mode3.pal`:
-```
+
+```shell
 tile2sam --crop 512x384+32+48 --scale 1.0x0.5 --mode 3 --pal mode3.png 512x192
 ```
 
 Extract a mode 2 screen from a 576x480 SimCoupe screenshot to `mode2.bin`:
-```
+
+```shell
 tile2sam --crop 512x384+32+48 --scale 0.5x0.5 --mode 2 mode2.png 256x192
 ```
 
 Generate code to draw masked 11x11 sprites from a mode 4 image:
-```
+
+```shell
 tile2sam --code masked,save --names cherry,strawb,orange --pal sprites.png 11x11
 ```
 
 Generate and append code to draw unmasked 11x11 tiles from a mode 4 image:
-```
+
+```shell
 tile2sam -a --code unmasked,clear --names cherry,strawb,orange --pal sprites.png 11
 ```
 
 Generate code to draw a masked 11x11 sprite only at even x positions:
-```
+
+```shell
 tile2sam --code masked,save --names ghost --shift 0 --pal ghost.png 11x11
 ```
 
 Generate code to draw a masked 11x11 sprite, restoring from clean screen copy:
-```
+
+```shell
 tile2sam --code masked,copy --names ghost --pal ghost.png 11x11
 ```
 
