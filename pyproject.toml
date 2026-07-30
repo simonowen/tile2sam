@@ -43,6 +43,9 @@ dev = [
 [project.scripts]
 tile2sam = "tile2sam.tile2sam:main"
 
+[tool.hatch.build]
+exclude = ["/temp"]
+
 [tool.ruff.lint]
 preview = true # opt into preview rules
 select = ["E", "F", "I"]  # E=pycodestyle, F=pyflakes, I=import sorting
